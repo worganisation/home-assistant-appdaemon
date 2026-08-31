@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.31.0 (2026-08-31)
+
+### Bug Fixes
+
+- Notify on qBittorrent cleanup threshold changes
+  ([#300](https://github.com/worganisation/home-assistant-appdaemon/pull/300),
+  [`332af47`](https://github.com/worganisation/home-assistant-appdaemon/commit/332af474d95590c2d70fb1110089ef067aabe767))
+
+### Chores
+
+- **sync**: Pin github-config-files workflows to 0.7.4
+  ([#298](https://github.com/worganisation/home-assistant-appdaemon/pull/298),
+  [`ce13b14`](https://github.com/worganisation/home-assistant-appdaemon/commit/ce13b14119ad9cedf146ce5c14453aaac85dc21c))
+
+### Features
+
+- Add end-of-day habit reminders
+  ([#297](https://github.com/worganisation/home-assistant-appdaemon/pull/297),
+  [`f13cb6a`](https://github.com/worganisation/home-assistant-appdaemon/commit/f13cb6a55b559b4929965c9bb008bb5770a30312))
+
+
 ## v0.30.0 (2026-08-20)
 
 ### Bug Fixes
