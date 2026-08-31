@@ -19,7 +19,9 @@ required each time.
 The cleanup threshold is read from
 `input_number.qbittorrent_storage_cleanup_threshold` and changes take effect without
 reloading AppDaemon. The `threshold` value in `apps/apps.yaml` remains the fallback
-while the helper is unavailable.
+while the helper is unavailable. Changing the helper to a value at or below current
+usage sends a fresh cleanup prompt, even if cleanup is already active. Changes made
+during the post-deletion wait take effect when that pending storage check runs.
 
 Ratio progress has a configurable `1.25` weighting when candidates are ordered. A
 torrent at ratio `4 / 5` therefore ranks alongside one at its full seeding-time limit,

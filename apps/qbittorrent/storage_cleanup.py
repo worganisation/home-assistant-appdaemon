@@ -403,19 +403,22 @@ class QbittorrentStorageCleanup(Hass):
         new: Any,
         **kwargs: Any,
     ) -> None:
-        """Re-evaluate cleanup when the configured threshold changes."""
+        """Offer cleanup when a changed threshold is already met by current usage."""
         del entity, attribute, kwargs
         old_threshold = self._usage(old)
         new_threshold = self._usage(new)
         usage = self._usage(self.get_state(self.storage_entity))
-        if new_threshold is None or usage is None or self._post_delete_check_pending:
+        if (
+            new_threshold is None
+            or new_threshold == old_threshold
+            or usage is None
+            or self._post_delete_check_pending
+        ):
             return
 
         if usage >= new_threshold:
-            crossed_threshold = old_threshold is None or usage < old_threshold
-            if crossed_threshold and not self._threshold_active:
-                self._offer_cleanup(usage)
             self._threshold_active = True
+            self._offer_cleanup(usage)
             return
 
         if usage < min(self.reset_below, new_threshold):
