@@ -9,10 +9,12 @@ switching Cursor logins does not overwrite another account's usage.
 The helper does not modify Cursor's database, store another local copy of the token,
 or put the token in either repository.
 
-AppDaemon validates the token received by the webhook and stores it at
-`/data/cursor/session_token`. The add-on's private `/data` directory persists across
-restarts and upgrades without placing the runtime credential in Home Assistant's
-shared configuration or the AppDaemon repository.
+AppDaemon validates the token received by the webhook and stores one private JSON
+record per Cursor account under the configured `account_store_path`, currently
+`/data/cursor/accounts`. The add-on's private `/data` directory persists across
+restarts and upgrades without placing runtime credentials in Home Assistant's shared
+configuration or the AppDaemon repository. `/data/cursor/session_token` is only the
+legacy single-account source read once by `_migrate_legacy_token` during migration.
 
 ## Install
 

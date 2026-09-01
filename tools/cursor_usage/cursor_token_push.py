@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import sys
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,7 +63,10 @@ def _decode_json_object(value: object, key: str) -> dict[str, Any]:
 def _read_session() -> tuple[str, CursorAccount]:
     """Read the current token and account metadata in one database snapshot."""
     database_uri = f"{CURSOR_STATE_DB.as_uri()}?mode=ro"
-    with sqlite3.connect(database_uri, uri=True, timeout=10) as connection:
+    with (
+        closing(sqlite3.connect(database_uri, uri=True, timeout=10)) as connection,
+        connection,
+    ):
         rows = dict(
             connection.execute(
                 "SELECT key, value FROM ItemTable WHERE key IN (?, ?, ?, ?)",

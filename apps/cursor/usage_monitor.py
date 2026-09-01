@@ -290,10 +290,10 @@ class CursorUsageMonitor(hass.Hass):
         if self.mqtt_client is None:
             return
         self._publish_mqtt(self._mqtt_global_topic("availability"), "offline")
-        for account in self.accounts.values():
+        for account in tuple(self.accounts.values()):
             self._publish_account_availability(account, is_available=False)
-        self.mqtt_client.loop_stop()
         self.mqtt_client.disconnect()
+        self.mqtt_client.loop_stop()
 
     @staticmethod
     def _account_id(subject: str) -> str:
@@ -385,7 +385,7 @@ class CursorUsageMonitor(hass.Hass):
 
     def _validate_legacy_owner(self, account: CursorAccount) -> None:
         """Require the migrated account to match the configured legacy owner."""
-        if account.email != self.legacy_account_email:
+        if account.email.casefold() != self.legacy_account_email.casefold():
             raise CursorAuthenticationError(
                 "Stored legacy token conflicts with its configured owner",
             )
@@ -609,7 +609,7 @@ class CursorUsageMonitor(hass.Hass):
         try:
             cookie_subject, jwt = decoded_cookie.split("::", maxsplit=1)
             encoded_payload = jwt.split(".")[1]
-        except IndexError as error:
+        except (IndexError, ValueError) as error:
             raise CursorAuthenticationError(
                 "Cursor session cookie has an unexpected format",
             ) from error
@@ -770,8 +770,9 @@ class CursorUsageMonitor(hass.Hass):
         now: datetime,
     ) -> dict[str, float]:
         """Calculate billing-cycle progress metrics."""
-        start = datetime.fromisoformat(cycle_start)
-        end = datetime.fromisoformat(cycle_end)
+        start = CursorUsageMonitor._parse_cycle_timestamp(cycle_start)
+        end = CursorUsageMonitor._parse_cycle_timestamp(cycle_end)
+        now = now.replace(tzinfo=UTC) if now.tzinfo is None else now.astimezone(UTC)
         duration_seconds = (end - start).total_seconds()
         if duration_seconds <= 0:
             return {"cycle_percent_elapsed": 0.0, "cycle_days_remaining": 0.0}
@@ -782,6 +783,20 @@ class CursorUsageMonitor(hass.Hass):
             "cycle_percent_elapsed": round(percent_elapsed, 2),
             "cycle_days_remaining": round(days_remaining, 2),
         }
+
+    @staticmethod
+    def _parse_cycle_timestamp(value: str) -> datetime:
+        """Parse an ISO 8601 or Unix-millisecond billing-cycle timestamp."""
+        normalized = value.strip()
+        try:
+            if normalized.lstrip("-").isdigit():
+                return datetime.fromtimestamp(int(normalized) / 1000, tz=UTC)
+            parsed = datetime.fromisoformat(normalized)
+        except (OSError, OverflowError) as error:
+            raise ValueError(f"Invalid billing-cycle timestamp: {value!r}") from error
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return parsed.astimezone(UTC)
 
     @staticmethod
     def _normalize_models(value: Any) -> tuple[dict[str, Any], float]:
@@ -900,7 +915,7 @@ class CursorUsageMonitor(hass.Hass):
 
         self._mqtt_connected = True
         self._publish_mqtt(self._mqtt_global_topic("availability"), "online")
-        for account in self.accounts.values():
+        for account in tuple(self.accounts.values()):
             self._publish_mqtt_discovery(account)
             self._publish_account_availability(account, is_available=True)
             self._publish_state(account)
