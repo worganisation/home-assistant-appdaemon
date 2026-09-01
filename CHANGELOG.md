@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.32.2 (2026-09-01)
+
+### Bug Fixes
+
+- Allow context prompts before first mood check-in
+  ([#308](https://github.com/worganisation/home-assistant-appdaemon/pull/308),
+  [`5b249c3`](https://github.com/worganisation/home-assistant-appdaemon/commit/5b249c3ab3d3b0b51f622be17e4fa0f74bace30b))
+
+
 ## v0.32.1 (2026-09-01)
 
 ### Bug Fixes
