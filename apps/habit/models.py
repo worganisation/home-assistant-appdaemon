@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any, Final, Self
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SCHEMA_VERSION: Final[int] = 3
+SCHEMA_VERSION: Final[int] = 4
 MIN_SCHEMA_VERSION: Final[int] = 1
 MAX_NAME_LENGTH: Final[int] = 255
 MAX_TEMPLATE_LENGTH: Final[int] = 255
@@ -585,7 +585,22 @@ def _migrate_1_to_2(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
-    """Convert mood history and add conditional/end-of-day habit state."""
+    """Add the opt-in end-of-day habit reminder setting.
+
+    ``HabitConfig.from_dict`` supplies the disabled default, so the migration is
+    intentionally additive and does not rewrite individual habit records.
+    """
+    return value
+
+
+def _migrate_3_to_4(value: dict[str, Any]) -> dict[str, Any]:
+    """Convert legacy mood history and add conditional habit state.
+
+    Schema 3 was already released with the legacy mood fields before the mood
+    check-in work reused that version on ``main``. Preserve an existing
+    ``mood_checkins`` list in case a store was written by that unreleased build;
+    otherwise convert the released schema-3 layout.
+    """
     migrated = dict(value)
     users = _mapping(migrated, "users")
     migrated_users: dict[str, Any] = {}
@@ -593,6 +608,9 @@ def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
     local_today = datetime.now().astimezone().date().isoformat()
     for user, raw_user in users.items():
         user_data = _dict(raw_user)
+        if "mood_checkins" in user_data:
+            migrated_users[user] = user_data
+            continue
         history = _mapping(user_data, "mood_history")
         current_mood = user_data.get("mood_today", "Not Set")
         current_note = user_data.get("mood_note", "")
@@ -661,6 +679,7 @@ def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
 SCHEMA_MIGRATIONS: Final[dict[int, Callable[[dict[str, Any]], dict[str, Any]]]] = {
     1: _migrate_1_to_2,
     2: _migrate_2_to_3,
+    3: _migrate_3_to_4,
 }
 
 

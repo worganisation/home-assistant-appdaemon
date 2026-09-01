@@ -20,11 +20,9 @@ from requests import HTTPError, RequestException, Response, Session
 
 CURSOR_API_BASE: Final[str] = "https://cursor.com"
 DEFAULT_POLL_INTERVAL: Final[int] = 5 * 60
-DEFAULT_TOKEN_PATH: Final[Path] = Path("/data/cursor/session_token")
 DEFAULT_ACCOUNT_STORE_PATH: Final[Path] = Path("/data/cursor/accounts")
 HTTP_TIMEOUT_SECONDS: Final[int] = 30
 ACCOUNT_STORE_VERSION: Final[int] = 1
-PAYLOAD_VERSION: Final[int] = 1
 ACCOUNT_ID_LENGTH: Final[int] = 12
 ACCOUNT_SLUG_HASH_LENGTH: Final[int] = 6
 
@@ -69,7 +67,6 @@ class CursorAccount:
     team_id: int | None
     team_name: str | None
     token: str
-    is_legacy: bool = False
 
     @property
     def device_id(self) -> str:
@@ -215,31 +212,6 @@ SENSORS: Final[tuple[SensorSpec, ...]] = (
     ),
 )
 
-LEGACY_MQTT_SENSOR_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "included_usage_used",
-        "included_usage_limit",
-        "included_usage_remaining",
-        "included_usage_percent",
-        "auto_percent_used",
-        "api_percent_used",
-        "total_percent_used",
-        "billing_cycle_start",
-        "billing_cycle_end",
-        "usage_by_model",
-        "session_token_expiry",
-        "usage_status",
-    },
-)
-DERIVED_SENSOR_KEYS: Final[frozenset[str]] = frozenset(
-    {
-        "cycle_percent_elapsed",
-        "cycle_days_remaining",
-        "usage_pace",
-        "projected_cycle_usage",
-    },
-)
-
 
 class CursorUsageMonitor(hass.Hass):
     """Poll Cursor usage per account and publish MQTT discovery sensors."""
@@ -251,20 +223,8 @@ class CursorUsageMonitor(hass.Hass):
         self.poll_interval = int(
             self.args.get("poll_interval_seconds", DEFAULT_POLL_INTERVAL),
         )
-        self.legacy_token_path = Path(
-            self.args.get("token_path", DEFAULT_TOKEN_PATH),
-        )
         self.account_store_path = Path(
             self.args.get("account_store_path", DEFAULT_ACCOUNT_STORE_PATH),
-        )
-        self.legacy_account_email = str(
-            self.args.get("legacy_account_email", ""),
-        ).strip()
-        if not self.legacy_account_email:
-            msg = "legacy_account_email is required during Cursor account migration"
-            raise ValueError(msg)
-        self.publish_legacy_derived_sensors = bool(
-            self.args.get("publish_legacy_derived_sensors", False),
         )
         self.http = Session()
         self.accounts: dict[str, CursorAccount] = {}
@@ -274,7 +234,6 @@ class CursorUsageMonitor(hass.Hass):
         self.mqtt_client = None
 
         self._load_accounts()
-        self._migrate_legacy_token()
         self._configure_mqtt()
         self.listen_event(self.receive_session_token, "cursor_session_token")
         self.run_every(self.poll_cursor, "immediate", self.poll_interval)
@@ -328,7 +287,6 @@ class CursorUsageMonitor(hass.Hass):
                     "team_id": account.team_id,
                     "team_name": account.team_name,
                     "token": account.token,
-                    "is_legacy": account.is_legacy,
                 },
                 sort_keys=True,
             ),
@@ -369,7 +327,6 @@ class CursorUsageMonitor(hass.Hass):
             else None,
             team_name=team_name if isinstance(team_name, str) else None,
             token=payload["token"],
-            is_legacy=payload.get("is_legacy") is True,
         )
 
     @staticmethod
@@ -381,13 +338,6 @@ class CursorUsageMonitor(hass.Hass):
         if claims.get("sub") != account.subject:
             raise CursorAuthenticationError(
                 "Persisted account subject does not match its token",
-            )
-
-    def _validate_legacy_owner(self, account: CursorAccount) -> None:
-        """Require the migrated account to match the configured legacy owner."""
-        if account.email.casefold() != self.legacy_account_email.casefold():
-            raise CursorAuthenticationError(
-                "Stored legacy token conflicts with its configured owner",
             )
 
     def _load_accounts(self) -> None:
@@ -415,70 +365,17 @@ class CursorUsageMonitor(hass.Hass):
                 continue
             self.accounts[account.account_id] = account
 
-    def _migrate_legacy_token(self) -> None:
-        """Import the existing single-account token without changing ownership."""
-        try:
-            token = self.legacy_token_path.read_text(encoding="utf-8").strip()
-        except FileNotFoundError:
-            return
-        except OSError as error:
-            self.error("Unable to read legacy Cursor token: %s", error)
-            return
-        try:
-            claims = self._token_claims(token)
-            subject = str(claims["sub"])
-            account_id = self._account_id(subject)
-            existing = self.accounts.get(account_id)
-            if existing is not None:
-                self._validate_legacy_owner(existing)
-                return
-            account = CursorAccount(
-                account_id=account_id,
-                account_slug=self._account_slug(self.legacy_account_email, account_id),
-                subject=subject,
-                email=self.legacy_account_email,
-                display_name=None,
-                team_id=None,
-                team_name=None,
-                token=token,
-                is_legacy=True,
-            )
-            self._persist_account(account)
-        except (CursorAuthenticationError, OSError, ValueError) as error:
-            self.error("Unable to migrate legacy Cursor token: %s", error)
-            return
-        self.accounts[account.account_id] = account
-        self.log("Imported legacy Cursor token for %s", account.email)
-
     def _account_from_event(
         self,
         token: str,
         data: dict[str, Any],
     ) -> CursorAccount:
         """Validate an event and return the account record it represents."""
+        metadata = cast("dict[str, Any]", data["account"])
         claims = self._token_claims(token)
         subject = str(claims["sub"])
         account_id = self._account_id(subject)
         existing = self.accounts.get(account_id)
-        metadata = data.get("account")
-        if metadata is None:
-            if existing is None:
-                raise CursorAuthenticationError(
-                    "Account metadata is required for a new Cursor account",
-                )
-            return CursorAccount(
-                account_id=existing.account_id,
-                account_slug=existing.account_slug,
-                subject=existing.subject,
-                email=existing.email,
-                display_name=existing.display_name,
-                team_id=existing.team_id,
-                team_name=existing.team_name,
-                token=token,
-                is_legacy=existing.is_legacy,
-            )
-        if data.get("version") != PAYLOAD_VERSION or not isinstance(metadata, dict):
-            raise CursorAuthenticationError("Cursor token event has an invalid payload")
         if metadata.get("subject") != subject:
             raise CursorAuthenticationError(
                 "Cursor account subject does not match its token",
@@ -487,11 +384,6 @@ class CursorUsageMonitor(hass.Hass):
         if not isinstance(email, str) or not email.strip():
             raise CursorAuthenticationError("Cursor account email is missing")
         email = email.strip()
-        is_legacy = existing.is_legacy if existing is not None else False
-        if is_legacy and email.casefold() != self.legacy_account_email.casefold():
-            raise CursorAuthenticationError(
-                "Legacy Cursor account email does not match its configured owner",
-            )
         display_name = metadata.get("display_name")
         team_id = metadata.get("team_id")
         team_name = metadata.get("team_name")
@@ -520,7 +412,6 @@ class CursorUsageMonitor(hass.Hass):
                 else None
             ),
             token=token,
-            is_legacy=is_legacy,
         )
 
     def receive_session_token(
@@ -531,10 +422,7 @@ class CursorUsageMonitor(hass.Hass):
     ) -> None:
         """Validate and persist a session token received from Home Assistant."""
         del event_type, kwargs
-        token = data.get("token")
-        if not isinstance(token, str) or not token:
-            self.error("Cursor session token event did not contain a token")
-            return
+        token = cast("str", data["token"])
         try:
             account = self._account_from_event(token, data)
             self._token_expiry(token)
@@ -915,6 +803,7 @@ class CursorUsageMonitor(hass.Hass):
 
         self._mqtt_connected = True
         self._publish_mqtt(self._mqtt_global_topic("availability"), "online")
+        self._remove_single_account_discovery()
         for account in tuple(self.accounts.values()):
             self._publish_mqtt_discovery(account)
             self._publish_account_availability(account, is_available=True)
@@ -953,22 +842,10 @@ class CursorUsageMonitor(hass.Hass):
             },
         ]
         for sensor in SENSORS:
-            if (
-                account.is_legacy
-                and sensor.key in DERIVED_SENSOR_KEYS
-                and not self.publish_legacy_derived_sensors
-            ):
-                continue
             account_object_id = sensor.account_object_id(account.account_slug)
-            legacy_discovery = account.is_legacy and sensor.key in LEGACY_MQTT_SENSOR_KEYS
-            unique_id = (
-                f"appdaemon_{sensor.object_id}"
-                if legacy_discovery
-                else sensor.unique_id(account.account_slug)
-            )
             config: dict[str, Any] = {
                 "name": sensor.name,
-                "unique_id": unique_id,
+                "unique_id": sensor.unique_id(account.account_slug),
                 "object_id": account_object_id,
                 "default_entity_id": f"sensor.{account_object_id}",
                 "state_topic": state_topic,
@@ -994,13 +871,18 @@ class CursorUsageMonitor(hass.Hass):
                     f"{{{{ value_json.{sensor.attributes_key} | tojson }}}}"
                 )
 
-            discovery_object_id = (
-                sensor.object_id if legacy_discovery else account_object_id
-            )
             config_topic = (
-                f"{self.mqtt_discovery_prefix}/sensor/{discovery_object_id}/config"
+                f"{self.mqtt_discovery_prefix}/sensor/{account_object_id}/config"
             )
             self._publish_mqtt(config_topic, config)
+
+    def _remove_single_account_discovery(self) -> None:
+        """Retire retained discovery configs from the pre-account cutover."""
+        for sensor in SENSORS:
+            config_topic = (
+                f"{self.mqtt_discovery_prefix}/sensor/{sensor.object_id}/config"
+            )
+            self._publish_mqtt(config_topic, "")
 
     def _maybe_update_device_model(
         self,
