@@ -42,6 +42,8 @@ MAX_MOOD_REQUEST_IDS: Final[int] = 100
 MAX_MOOD_CALENDAR_DECISIONS: Final[int] = 512
 MIN_MOOD_CONTEXT_COOLDOWN: Final[int] = 15
 MAX_MOOD_CONTEXT_COOLDOWN: Final[int] = 360
+MIN_MOOD_CONTEXT_AWAY_THRESHOLD: Final[int] = 110
+MAX_MOOD_CONTEXT_AWAY_THRESHOLD: Final[int] = 1440
 MIXED_MOOD_SCORE_RANGE: Final[int] = 2
 
 
@@ -372,6 +374,7 @@ class UserData:
     mood_request_ids: list[str] = field(default_factory=list)
     mood_context_prompts_enabled: bool | None = None
     mood_context_cooldown_minutes: int = 90
+    mood_context_away_threshold_minutes: int = 120
     mood_last_context_prompt_at: str | None = None
     mood_calendar_decisions: dict[str, bool] = field(default_factory=dict)
     mood_calendar_prompted: list[str] = field(default_factory=list)
@@ -403,6 +406,12 @@ class UserData:
             <= MAX_MOOD_CONTEXT_COOLDOWN
         ):
             raise ValueError("mood context cooldown must be between 15 and 360")
+        if not (
+            MIN_MOOD_CONTEXT_AWAY_THRESHOLD
+            <= self.mood_context_away_threshold_minutes
+            <= MAX_MOOD_CONTEXT_AWAY_THRESHOLD
+        ):
+            raise ValueError("mood context away threshold must be between 110 and 1440")
         self._validate_retained_mood_state()
         if self.mood_last_context_prompt_at is not None:
             datetime.fromisoformat(self.mood_last_context_prompt_at)
@@ -449,6 +458,9 @@ class UserData:
             "mood_request_ids": self.mood_request_ids,
             "mood_context_prompts_enabled": self.mood_context_prompts_enabled,
             "mood_context_cooldown_minutes": self.mood_context_cooldown_minutes,
+            "mood_context_away_threshold_minutes": (
+                self.mood_context_away_threshold_minutes
+            ),
             "mood_last_context_prompt_at": self.mood_last_context_prompt_at,
             "mood_calendar_decisions": self.mood_calendar_decisions,
             "mood_calendar_prompted": self.mood_calendar_prompted,
@@ -547,6 +559,11 @@ class UserData:
                 value,
                 "mood_context_cooldown_minutes",
                 90,
+            ),
+            mood_context_away_threshold_minutes=_integer(
+                value,
+                "mood_context_away_threshold_minutes",
+                120,
             ),
             mood_last_context_prompt_at=_optional_string(
                 value,
@@ -661,6 +678,7 @@ def _migrate_3_to_4(value: dict[str, Any]) -> dict[str, Any]:
                 "mood_request_ids": [],
                 "mood_context_prompts_enabled": None,
                 "mood_context_cooldown_minutes": 90,
+                "mood_context_away_threshold_minutes": 120,
                 "mood_last_context_prompt_at": None,
                 "mood_calendar_decisions": {},
                 "mood_calendar_prompted": [],
