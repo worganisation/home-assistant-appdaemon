@@ -83,6 +83,7 @@ class HabitConfig:
     repeat_interval_minutes: int = 60
     streak_min_days_per_week: int = 7
     ai_enabled: bool = False
+    end_of_day_reminder_enabled: bool = False
     icon_on: str = "mdi:check-circle"
     icon_active: str = "mdi:counter"
     icon_off: str = "mdi:circle-outline"
@@ -159,6 +160,11 @@ class HabitConfig:
                 7,
             ),
             ai_enabled=_boolean(value, "ai_enabled", default=False),
+            end_of_day_reminder_enabled=_boolean(
+                value,
+                "end_of_day_reminder_enabled",
+                default=False,
+            ),
             icon_on=_string(value, "icon_on", "mdi:check-circle"),
             icon_active=_string(value, "icon_active", "mdi:counter"),
             icon_off=_string(value, "icon_off", "mdi:circle-outline"),
@@ -259,6 +265,7 @@ class UserData:
     completions: dict[int, dict[str, int]] = field(default_factory=dict)
     not_required_days: dict[int, set[str]] = field(default_factory=dict)
     pending_reminders: dict[int, PendingReminder] = field(default_factory=dict)
+    end_of_day_reminder_sent_days: dict[int, str] = field(default_factory=dict)
     template_progress: dict[int, TemplateProgress] = field(default_factory=dict)
     mood_history: dict[str, str] = field(default_factory=dict)
     mood_today: str = "Not Set"
@@ -299,6 +306,9 @@ class UserData:
             "pending_reminders": {
                 str(slot): pending.to_dict()
                 for slot, pending in self.pending_reminders.items()
+            },
+            "end_of_day_reminder_sent_days": {
+                str(slot): day for slot, day in self.end_of_day_reminder_sent_days.items()
             },
             "template_progress": {
                 str(slot): progress.to_dict()
@@ -341,6 +351,13 @@ class UserData:
             int(slot): PendingReminder.from_dict(_dict(item))
             for slot, item in _mapping(value, "pending_reminders").items()
         }
+        end_of_day_reminder_sent_days = {
+            int(slot): _date_string(day)
+            for slot, day in _mapping(
+                value,
+                "end_of_day_reminder_sent_days",
+            ).items()
+        }
         template_progress = {
             int(slot): TemplateProgress.from_dict(_dict(item))
             for slot, item in _mapping(value, "template_progress").items()
@@ -360,6 +377,7 @@ class UserData:
             completions=completions,
             not_required_days=not_required_days,
             pending_reminders=pending_reminders,
+            end_of_day_reminder_sent_days=end_of_day_reminder_sent_days,
             template_progress=template_progress,
             mood_history=mood_history,
             mood_today=_mood(value.get("mood_today", "Not Set")),
@@ -390,10 +408,11 @@ def _migrate_1_to_2(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
-    """Add conditional requirement configuration and skipped-day history.
+    """Add conditional requirements and opt-in end-of-day reminders.
 
-    Both fields have empty defaults, so existing habits remain unconditionally
-    required and their stored completion history is unchanged.
+    The new fields have empty or disabled defaults, so existing habits remain
+    unconditionally required and their stored history is unchanged. The migration
+    is intentionally additive and does not rewrite individual habit records.
     """
     return value
 
@@ -556,6 +575,7 @@ def normalize_spare_slot(data: UserData) -> tuple[int | None, tuple[int, ...]]:
         data.completions.pop(spare_slot, None)
         data.not_required_days.pop(spare_slot, None)
         data.pending_reminders.pop(spare_slot, None)
+        data.end_of_day_reminder_sent_days.pop(spare_slot, None)
         data.template_progress.pop(spare_slot, None)
     else:
         spare_slot = 1
@@ -569,6 +589,7 @@ def normalize_spare_slot(data: UserData) -> tuple[int | None, tuple[int, ...]]:
         data.completions.pop(slot, None)
         data.not_required_days.pop(slot, None)
         data.pending_reminders.pop(slot, None)
+        data.end_of_day_reminder_sent_days.pop(slot, None)
         data.template_progress.pop(slot, None)
     return added_spare, retired
 
