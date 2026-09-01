@@ -206,9 +206,9 @@ Context can include:
 Unavailable context is omitted. If AI generation fails or returns an empty response,
 the app sends a deterministic fallback reminder.
 
-Mood context prompting is separate from reminder text generation. It starts only
-after the day's first check-in, uses a configurable 15–360 minute cooldown (90 minutes
-by default), coalesces triggers during the cooldown, and discards stale work. Calendar
+Mood context prompting is separate from reminder text generation. It can initiate the
+day's mood tracking, uses a configurable 15–360 minute cooldown (90 minutes by default),
+coalesces triggers during the cooldown, and discards stale work. Calendar
 blocks ignore cancelled/all-day events, merge overlaps or gaps of up to 15 minutes,
 and use structured Qwen output to fail closed. The classifier receives only sanitized
 event titles, calendar names, timing, duration, and recurrence metadata; descriptions
