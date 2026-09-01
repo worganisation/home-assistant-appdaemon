@@ -42,7 +42,7 @@ reportUnknownVariableType = "none"
 
 [tool.codespell]
 skip = '*.json,*.csv,*.xml,*.lock'
-ignore-words-list = "hass,ags"
+ignore-words-list = "hass,ags,checkin"
 
 [tool.semantic_release]
 tag_format = "{version}"

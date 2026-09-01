@@ -5,6 +5,8 @@ from __future__ import annotations
 from datetime import datetime, time, timedelta
 from typing import Any, Final, Protocol
 
+from .models import LOGICAL_DAY_BOUNDARY_HOUR
+
 END_OF_DAY_REMINDER_TIME: Final[time] = time(23, 55)
 
 
@@ -170,6 +172,20 @@ def repeat_fits_before_midnight(now: datetime, interval_minutes: int) -> bool:
         tzinfo=now.tzinfo,
     )
     cutoff = next_midnight - timedelta(minutes=interval_minutes + 5)
+    return now < cutoff
+
+
+def repeat_fits_before_logical_day_end(
+    now: datetime,
+    interval_minutes: int,
+    *,
+    boundary_hour: int = LOGICAL_DAY_BOUNDARY_HOUR,
+) -> bool:
+    """Return whether a repeat fits before the next logical-day boundary."""
+    boundary = datetime.combine(now.date(), time(boundary_hour), tzinfo=now.tzinfo)
+    if now >= boundary:
+        boundary += timedelta(days=1)
+    cutoff = boundary - timedelta(minutes=interval_minutes + 5)
     return now < cutoff
 
 
