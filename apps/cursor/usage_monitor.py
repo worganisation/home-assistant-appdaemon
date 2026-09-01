@@ -89,7 +89,6 @@ SENSORS: Final[tuple[SensorSpec, ...]] = (
         name="Included usage used",
         unit_of_measurement="USD",
         device_class="monetary",
-        state_class="total_increasing",
     ),
     SensorSpec(
         key="included_usage_limit",
@@ -97,7 +96,6 @@ SENSORS: Final[tuple[SensorSpec, ...]] = (
         name="Included usage limit",
         unit_of_measurement="USD",
         device_class="monetary",
-        state_class="measurement",
     ),
     SensorSpec(
         key="included_usage_remaining",
@@ -105,7 +103,6 @@ SENSORS: Final[tuple[SensorSpec, ...]] = (
         name="Included usage remaining",
         unit_of_measurement="USD",
         device_class="monetary",
-        state_class="measurement",
     ),
     SensorSpec(
         key="included_usage_percent",
