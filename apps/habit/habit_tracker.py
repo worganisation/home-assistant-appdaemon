@@ -2679,10 +2679,8 @@ class HabitTracker(hass.Hass):
     ) -> None:
         data = self.store.data.users[user]
         now = self._aware_now()
-        if (
-            not data.mood_context_prompts_enabled
-            or not self._has_mood_for_day(data, self._logical_today())
-            or now - occurred_at > timedelta(minutes=CONTEXT_STALE_MINUTES)
+        if not data.mood_context_prompts_enabled or now - occurred_at > timedelta(
+            minutes=CONTEXT_STALE_MINUTES,
         ):
             return
         last_prompt = (
