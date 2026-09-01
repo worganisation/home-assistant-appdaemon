@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v0.32.1 (2026-09-01)
+
+### Bug Fixes
+
+- Allow context prompts before first mood check-in
+  ([#307](https://github.com/worganisation/home-assistant-appdaemon/pull/307),
+  [`4697a18`](https://github.com/worganisation/home-assistant-appdaemon/commit/4697a186a58f2673ab507c81feda4bc306c8b9f6))
+
+- **cursor**: Remove invalid monetary state classes
+  ([#304](https://github.com/worganisation/home-assistant-appdaemon/pull/304),
+  [`08e63fb`](https://github.com/worganisation/home-assistant-appdaemon/commit/08e63fb9dba0594ee2a6a4d873918fd64f7d63f2))
+
+### Chores
+
+- **sync**: Pin github-config-files workflows to 0.8.2
+  ([#305](https://github.com/worganisation/home-assistant-appdaemon/pull/305),
+  [`c5045ba`](https://github.com/worganisation/home-assistant-appdaemon/commit/c5045ba86d5a93128e442a89503c59e2ec71a170))
+
+- **sync**: Pin github-config-files workflows to 0.8.4
+  ([#306](https://github.com/worganisation/home-assistant-appdaemon/pull/306),
+  [`3b0d3fa`](https://github.com/worganisation/home-assistant-appdaemon/commit/3b0d3fa413867b8dac7f7019b442d8a30dcf6e06))
+
+
 ## v0.32.0 (2026-09-01)
 
 ### Bug Fixes
