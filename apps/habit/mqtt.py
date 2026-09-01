@@ -9,7 +9,13 @@ from typing import TYPE_CHECKING
 import paho.mqtt.client as paho
 from paho.mqtt.enums import CallbackAPIVersion
 
-from .models import MAX_TEMPLATE_LENGTH, MOOD_OPTIONS, CompletionMode
+from .models import (
+    MAX_MOOD_CONTEXT_AWAY_THRESHOLD,
+    MAX_TEMPLATE_LENGTH,
+    MIN_MOOD_CONTEXT_AWAY_THRESHOLD,
+    MOOD_OPTIONS,
+    CompletionMode,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
@@ -355,6 +361,19 @@ class HabitMqtt:
                         "step": 15,
                         "mode": "slider",
                         "unit_of_measurement": "min",
+                    },
+                ),
+                EntitySpec(
+                    "number",
+                    "mood_context_away_threshold",
+                    "Mood away-from-home threshold",
+                    {
+                        "min": MIN_MOOD_CONTEXT_AWAY_THRESHOLD,
+                        "max": MAX_MOOD_CONTEXT_AWAY_THRESHOLD,
+                        "step": 10,
+                        "mode": "box",
+                        "unit_of_measurement": "min",
+                        "icon": "mdi:home-clock-outline",
                     },
                 ),
                 EntitySpec(

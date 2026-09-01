@@ -55,6 +55,7 @@ Each user also receives:
 - `sensor.<user>_mood_summary` (seven-day cards and compact 28-day chart data)
 - `switch.<user>_mood_context_prompts`
 - `number.<user>_mood_context_cooldown`
+- `number.<user>_mood_context_away_threshold`
 - `time.<user>_mood_reminder_time` (daily template for the first fire)
 - `switch.<user>_mood_reminders` (enable/disable mood reminder notifications)
 - `datetime.<user>_mood_next_reminder` (editable absolute fire time)
@@ -213,9 +214,11 @@ blocks ignore cancelled/all-day events, merge overlaps or gaps of up to 15 minut
 and use structured Qwen output to fail closed. The classifier receives only sanitized
 event titles, calendar names, timing, duration, and recurrence metadata; descriptions
 and locations are never sent to it. Presence prompts fire 15 minutes after returning
-from work or after another outing lasting at least two hours. Outing state and sent
-calendar-block fingerprints are persisted across AppDaemon restarts. Will's context
-prompts default on; Vic's scheduled and contextual prompts default off.
+from work or after another outing lasting at least the configured away-from-home
+threshold (120 minutes by default). The threshold is configurable from 110 to 1440
+minutes in 10-minute increments. Outing state and sent calendar-block fingerprints are
+persisted across AppDaemon restarts. Will's context prompts default on; Vic's scheduled
+and contextual prompts default off.
 
 This implementation ports the behavior from the legacy Home Assistant
 `script.habit_send_reminder`. AppDaemon becomes the source of truth after cutover;

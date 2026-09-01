@@ -17,10 +17,12 @@ from .models import (
     LOGICAL_DAY_BOUNDARY_HOUR,
     MAX_DURATION_MINUTES,
     MAX_MOOD_CALENDAR_DECISIONS,
+    MAX_MOOD_CONTEXT_AWAY_THRESHOLD,
     MAX_MOOD_NOTE_LENGTH,
     MAX_MOOD_REQUEST_IDS,
     MAX_NAME_LENGTH,
     MAX_TEMPLATE_LENGTH,
+    MIN_MOOD_CONTEXT_AWAY_THRESHOLD,
     MOOD_EDIT_WINDOW_DAYS,
     MOOD_OPTIONS,
     CompletionMode,
@@ -108,7 +110,6 @@ TIME_TICK_ENTITY: Final[str] = "sensor.time"
 MAX_DEBOUNCE_SECONDS: Final[float] = 60
 MOOD_NOTIFICATION_TIMEOUT_SECONDS: Final[int] = 15 * 60
 MOOD_NOTE_TIMEOUT_SECONDS: Final[int] = 60 * 60
-CONTEXT_OUTING_MINUTES: Final[int] = 120
 CONTEXT_PROMPT_DELAY_MINUTES: Final[int] = 15
 CONTEXT_STALE_MINUTES: Final[int] = 120
 CALENDAR_SCAN_INTERVAL_SECONDS: Final[int] = 15 * 60
@@ -501,7 +502,7 @@ class HabitTracker(hass.Hass):
             if counts_changed:
                 self._publish_habit_type_counts(user)
 
-    def _update_mood(  # noqa: C901
+    def _update_mood(  # noqa: C901, PLR0912
         self,
         user: str,
         key: str,
@@ -535,6 +536,12 @@ class HabitTracker(hass.Hass):
             data.mood_context_prompts_enabled = _mqtt_bool(payload)
         elif key == "mood_context_cooldown":
             data.mood_context_cooldown_minutes = _bounded_int(payload, 15, 360)
+        elif key == "mood_context_away_threshold":
+            data.mood_context_away_threshold_minutes = _bounded_int(
+                payload,
+                MIN_MOOD_CONTEXT_AWAY_THRESHOLD,
+                MAX_MOOD_CONTEXT_AWAY_THRESHOLD,
+            )
         elif key.startswith("mood_edit_"):
             self._update_mood_editor(user, key, payload)
             return
@@ -956,6 +963,10 @@ class HabitTracker(hass.Hass):
         self.mqtt.publish(
             f"{prefix}/mood_context_cooldown/state",
             str(data.mood_context_cooldown_minutes),
+        )
+        self.mqtt.publish(
+            f"{prefix}/mood_context_away_threshold/state",
+            str(data.mood_context_away_threshold_minutes),
         )
         self._publish_mood_editor_state(user)
         self._publish_mood_next_reminder(user)
@@ -2391,7 +2402,7 @@ class HabitTracker(hass.Hass):
         reason: str | None = None
         if data.mood_away_saw_work:
             reason = "returning home from work"
-        elif duration_minutes >= CONTEXT_OUTING_MINUTES:
+        elif duration_minutes >= data.mood_context_away_threshold_minutes:
             reason = "returning home after a substantial outing"
         data.mood_away_since = None
         data.mood_away_saw_work = False
