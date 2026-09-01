@@ -2,6 +2,33 @@
 
 <!-- version list -->
 
+## v0.32.0 (2026-09-01)
+
+### Bug Fixes
+
+- **ci**: Install app type-check dependencies
+  ([#302](https://github.com/worganisation/home-assistant-appdaemon/pull/302),
+  [`aaeee7f`](https://github.com/worganisation/home-assistant-appdaemon/commit/aaeee7f17d38e37e2454de65b8ab24673b49caac))
+
+- **habits**: Preserve mood history in schema v4
+  ([#303](https://github.com/worganisation/home-assistant-appdaemon/pull/303),
+  [`5ad4d95`](https://github.com/worganisation/home-assistant-appdaemon/commit/5ad4d95760a28bdad8a58bee16e51fee696fffab))
+
+### Features
+
+- Add conditional requirements for habits
+  ([#292](https://github.com/worganisation/home-assistant-appdaemon/pull/292),
+  [`8661e0b`](https://github.com/worganisation/home-assistant-appdaemon/commit/8661e0b9ef828d6077d773da2449f98686b75730))
+
+- Enhance mood tracking with new features
+  ([#291](https://github.com/worganisation/home-assistant-appdaemon/pull/291),
+  [`a269a6f`](https://github.com/worganisation/home-assistant-appdaemon/commit/a269a6f9f0ee47bd26056254b1746e2bb1ff0fb1))
+
+- **cursor**: Enable multi-account support for usage monitoring
+  ([#282](https://github.com/worganisation/home-assistant-appdaemon/pull/282),
+  [`29a0c2f`](https://github.com/worganisation/home-assistant-appdaemon/commit/29a0c2fc55bcde6007e6755883b0569b32710241))
+
+
 ## v0.31.0 (2026-08-31)
 
 ### Bug Fixes
