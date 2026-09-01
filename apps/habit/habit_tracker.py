@@ -7,10 +7,9 @@ import json
 import re
 import uuid
 from contextlib import suppress
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta, tzinfo
 from pathlib import Path
 from typing import Any, Final, cast
-from zoneinfo import ZoneInfo
 
 import appdaemon.plugins.hass.hassapi as hass
 
@@ -41,6 +40,7 @@ from .models import (
 from .mqtt import HabitMqtt, MqttSettings
 from .reminders import (
     ReminderManager,
+    end_of_day_reminder_fire_at,
     repeat_fits_before_logical_day_end,
     repeat_fits_before_midnight,
 )
@@ -106,7 +106,6 @@ MAX_NETWORK_PORT: Final[int] = 65535
 # even if one of its dependencies changes without emitting an event.
 TIME_TICK_ENTITY: Final[str] = "sensor.time"
 MAX_DEBOUNCE_SECONDS: Final[float] = 60
-LOCAL_TIMEZONE: Final[ZoneInfo] = ZoneInfo("Europe/London")
 MOOD_NOTIFICATION_TIMEOUT_SECONDS: Final[int] = 15 * 60
 MOOD_NOTE_TIMEOUT_SECONDS: Final[int] = 60 * 60
 CONTEXT_OUTING_MINUTES: Final[int] = 120
@@ -413,6 +412,8 @@ class HabitTracker(hass.Hass):
             config.streak_min_days_per_week = _bounded_int(payload, 1, 7)
         elif key == "ai":
             config.ai_enabled = _mqtt_bool(payload)
+        elif key == "end_of_day_reminder":
+            config.end_of_day_reminder_enabled = _mqtt_bool(payload)
         elif key in {"icon_on", "icon_active", "icon_off", "icon_zero"}:
             icon = payload.strip()
             if len(icon) > MAX_NAME_LENGTH:
@@ -465,6 +466,9 @@ class HabitTracker(hass.Hass):
         }:
             self._rebuild_template_listeners(user, slot)
             self._schedule_evaluation(user, slot)
+        # Name changes can configure or delete a slot, so reconcile the derived
+        # timer after every configuration edit rather than only after toggles.
+        self._schedule_end_of_day_reminder(user, config)
         added_spare, retired = self._normalize_user_slots(user)
         config = data.habits.get(slot)
         self.store.save()
@@ -546,8 +550,8 @@ class HabitTracker(hass.Hass):
         now = self._aware_now()
         occurrence = occurred_at or now
         if occurrence.tzinfo is None:
-            occurrence = occurrence.replace(tzinfo=LOCAL_TIMEZONE)
-        occurrence = occurrence.astimezone(LOCAL_TIMEZONE)
+            occurrence = occurrence.replace(tzinfo=self._local_timezone())
+        occurrence = occurrence.astimezone(self._local_timezone())
         target_day = logical_day or logical_date_for(occurrence)
         self._validate_mood_edit_day(target_day, today=logical_date_for(now))
         timestamp = datetime.now(UTC).isoformat()
@@ -591,7 +595,7 @@ class HabitTracker(hass.Hass):
         checkin.logical_date = logical_day.isoformat()
         checkin.mood = mood
         checkin.note = note[:MAX_MOOD_NOTE_LENGTH]
-        checkin.occurred_at = occurred_at.astimezone(LOCAL_TIMEZONE).isoformat()
+        checkin.occurred_at = occurred_at.astimezone(self._local_timezone()).isoformat()
         checkin.updated_at = datetime.now(UTC).isoformat()
         checkin.__post_init__()
         data.mood_narratives.pop(old_day, None)
@@ -623,7 +627,7 @@ class HabitTracker(hass.Hass):
         self.store.append_mood_log(user, operation, checkin)
         self._reset_mood_editor(user)
         self._publish_mood_state(user)
-        self._publish_mood_editor_discovery()
+        self._publish_mood_editor_discovery(user)
 
     def _update_mood_editor(  # noqa: C901
         self,
@@ -649,10 +653,10 @@ class HabitTracker(hass.Hass):
                     else datetime.combine(
                         date.fromisoformat(checkin.logical_date),
                         time(12),
-                        tzinfo=LOCAL_TIMEZONE,
+                        tzinfo=self._local_timezone(),
                     )
                 )
-                editor["time"] = occurrence.astimezone(LOCAL_TIMEZONE).strftime(
+                editor["time"] = occurrence.astimezone(self._local_timezone()).strftime(
                     "%H:%M:%S",
                 )
                 editor["value"] = checkin.mood
@@ -695,7 +699,7 @@ class HabitTracker(hass.Hass):
         occurrence = datetime.combine(
             calendar_day,
             selected_time,
-            tzinfo=LOCAL_TIMEZONE,
+            tzinfo=self._local_timezone(),
         )
         selected_id = self._selected_editor_id(user)
         if selected_id is None:
@@ -780,8 +784,10 @@ class HabitTracker(hass.Hass):
         config = data.habits[slot]
         if count:
             self._clear_pending(user, slot)
+            self.reminders.cancel_end_of_day(user, slot)
         elif config.configured:
             self._seed_next_reminder(user, config, force=True)
+            self._schedule_end_of_day_reminder(user, config)
         if config.completion_mode.is_event_driven:
             self.templates.cancel_duration(user, slot)
             progress = self._template_progress(user, slot, day)
@@ -939,7 +945,7 @@ class HabitTracker(hass.Hass):
                 "timestamp": datetime.combine(
                     logical_day,
                     time(12),
-                    tzinfo=LOCAL_TIMEZONE,
+                    tzinfo=self._local_timezone(),
                 ).isoformat(),
             }
             if summary is not None:
@@ -966,7 +972,7 @@ class HabitTracker(hass.Hass):
                 continue
             inferred = checkin.occurred_at is None
             timestamp = (
-                datetime.combine(logical_day, time(12), tzinfo=LOCAL_TIMEZONE)
+                datetime.combine(logical_day, time(12), tzinfo=self._local_timezone())
                 if inferred
                 else datetime.fromisoformat(cast("str", checkin.occurred_at))
             )
@@ -1004,7 +1010,7 @@ class HabitTracker(hass.Hass):
                 "time unknown"
                 if checkin.occurred_at is None
                 else datetime.fromisoformat(checkin.occurred_at)
-                .astimezone(LOCAL_TIMEZONE)
+                .astimezone(self._local_timezone())
                 .strftime("%H:%M")
             )
             label = f"{checkin.logical_date} {clock} · {checkin.mood} · {checkin.id[:6]}"
@@ -1038,15 +1044,14 @@ class HabitTracker(hass.Hass):
         ):
             self.mqtt.publish(f"{prefix}/{key}/state", editor[field])
 
-    def _publish_mood_editor_discovery(self) -> None:
+    def _publish_mood_editor_discovery(self, user: str) -> None:
         if self.mqtt is None:
             return
         self.mqtt.publish_mood_discovery(
-            self.users,
-            editor_options={user: self._editor_options(user) for user in self.users},
+            [user],
+            editor_options={user: self._editor_options(user)},
         )
-        for user in self.users:
-            self._publish_mood_editor_state(user)
+        self._publish_mood_editor_state(user)
 
     def _has_mood_for_day(self, data: UserData, logical_day: date) -> bool:
         key = logical_day.isoformat()
@@ -1093,16 +1098,49 @@ class HabitTracker(hass.Hass):
         for slot, config in list(data.habits.items()):
             pending = data.pending_reminders.get(slot)
             if not config.configured or self._is_complete_today(user, slot):
+                self.reminders.cancel_end_of_day(user, slot)
                 if pending is not None:
                     self._clear_pending(user, slot)
                     changed = True
                 continue
+            self._schedule_end_of_day_reminder(user, config)
             if pending is None:
                 self._seed_next_reminder(user, config)
                 changed = True
                 continue
             self._arm_pending(user, slot, pending)
         return changed
+
+    def _schedule_end_of_day_reminder(
+        self,
+        user: str,
+        config: HabitConfig,
+    ) -> None:
+        """Arm today's opt-in 23:55 reminder independently of the repeat chain."""
+        if (
+            not self.reminders_enabled
+            or not config.configured
+            or not config.end_of_day_reminder_enabled
+            or self._is_complete_today(user, config.slot)
+        ):
+            self.reminders.cancel_end_of_day(user, config.slot)
+            return
+        now = self._aware_now()
+        fire_at = end_of_day_reminder_fire_at(
+            now,
+            last_sent_day=self.store.data.users[user].end_of_day_reminder_sent_days.get(
+                config.slot,
+            ),
+        )
+        if fire_at is None:
+            self.reminders.cancel_end_of_day(user, config.slot)
+            return
+        self.reminders.schedule_end_of_day(
+            user,
+            config.slot,
+            fire_at=fire_at,
+            now=now,
+        )
 
     def _restore_mood_reminder(self, user: str, data: UserData) -> bool:
         if not data.mood_reminders_enabled or self._has_mood_for_day(
@@ -1603,6 +1641,13 @@ class HabitTracker(hass.Hass):
             return now
         return now.replace(tzinfo=datetime.now().astimezone().tzinfo)
 
+    def _local_timezone(self) -> tzinfo:
+        """Return the timezone configured for AppDaemon's current clock."""
+        timezone = self._aware_now().tzinfo
+        if timezone is None:  # Defensive: _aware_now always attaches one.
+            raise RuntimeError("AppDaemon local timezone is unavailable")
+        return timezone
+
     def _reminder_callback(self, kwargs: dict[str, Any]) -> None:
         user = str(kwargs["user"])
         if kwargs.get("kind") == "mood":
@@ -1619,6 +1664,10 @@ class HabitTracker(hass.Hass):
             )
             return
         slot = int(kwargs["slot"])
+        if kwargs.get("kind") == "end_of_day":
+            self.reminders.release_end_of_day(user, slot)
+            self._send_end_of_day_reminder(user, slot)
+            return
         self.reminders.release(user, slot)
         self._send_reminder(
             user,
@@ -1684,6 +1733,32 @@ class HabitTracker(hass.Hass):
             slot,
             reminder_index,
         )
+        self._notify_habit(user, slot, config, message)
+
+    def _send_end_of_day_reminder(self, user: str, slot: int) -> None:
+        """Send the opt-in final check without changing the regular reminder chain."""
+        if not self.reminders_enabled:
+            return
+        data = self.store.data.users[user]
+        config = data.habits.get(slot)
+        today = self._aware_now().date().isoformat()
+        if (
+            config is None
+            or not config.configured
+            or not config.end_of_day_reminder_enabled
+            or self._is_complete_today(user, slot)
+            or data.end_of_day_reminder_sent_days.get(slot) == today
+        ):
+            return
+        # Persist before notifying so a restart or configuration edit cannot
+        # re-arm another final check after this one has fired.
+        data.end_of_day_reminder_sent_days[slot] = today
+        self.store.save()
+        message = (
+            f"If you've already done {config.name}, mark it complete before midnight "
+            "to keep your streak."
+        )
+        self.log("Sending end-of-day habit reminder for %s slot %s", user, slot)
         self._notify_habit(user, slot, config, message)
 
     def _notify_habit(
@@ -2186,7 +2261,10 @@ class HabitTracker(hass.Hass):
             events = self._context_calendar_events(user, now=now)
             for block in self._calendar_blocks(events, now=now):
                 fingerprint = self._calendar_block_fingerprint(user, block)
-                if fingerprint in self._calendar_scheduled:
+                if (
+                    fingerprint in self._calendar_scheduled
+                    or fingerprint in data.mood_calendar_prompted
+                ):
                     continue
                 decision = data.mood_calendar_decisions.get(fingerprint)
                 if decision is None:
@@ -2274,14 +2352,6 @@ class HabitTracker(hass.Hass):
                             str(event.get("summary", "")),
                             255,
                         ),
-                        "description": _privacy_safe_calendar_text(
-                            str(event.get("description", "")),
-                            1000,
-                        ),
-                        "location": _privacy_safe_calendar_text(
-                            str(event.get("location", "")),
-                            255,
-                        ),
                         "recurrence": (
                             "recurring rule present"
                             if event.get("rrule")
@@ -2359,8 +2429,6 @@ class HabitTracker(hass.Hass):
             safe_events.append(
                 {
                     "title": event["summary"],
-                    "description": event["description"],
-                    "location": event["location"],
                     "calendar": event["calendar"],
                     "start": cast("datetime", event["start"]).isoformat(),
                     "end": cast("datetime", event["end"]).isoformat(),
@@ -2413,8 +2481,14 @@ class HabitTracker(hass.Hass):
     def _calendar_prompt_callback(self, kwargs: dict[str, Any]) -> None:
         fingerprint = str(kwargs["fingerprint"])
         self._calendar_scheduled.discard(fingerprint)
+        user = str(kwargs["user"])
+        data = self.store.data.users[user]
+        if fingerprint not in data.mood_calendar_prompted:
+            data.mood_calendar_prompted.append(fingerprint)
+            del data.mood_calendar_prompted[:-MAX_MOOD_CALENDAR_DECISIONS]
+            self.store.save()
         self._queue_context_prompt(
-            str(kwargs["user"]),
+            user,
             reason="after a reflection-worthy calendar block",
             occurred_at=datetime.fromisoformat(str(kwargs["occurred_at"])),
         )
@@ -2438,7 +2512,7 @@ class HabitTracker(hass.Hass):
             None
             if data.mood_last_context_prompt_at is None
             else datetime.fromisoformat(data.mood_last_context_prompt_at).astimezone(
-                LOCAL_TIMEZONE,
+                self._local_timezone(),
             )
         )
         cooldown = timedelta(minutes=data.mood_context_cooldown_minutes)
@@ -2682,9 +2756,12 @@ class HabitTracker(hass.Hass):
         data = self.store.data.users[user]
         for slot in list(data.habits):
             self._clear_pending(user, slot)
+            self.reminders.cancel_end_of_day(user, slot)
+        data.end_of_day_reminder_sent_days.clear()
         for config in data.habits.values():
             if config.configured:
                 self._seed_next_reminder(user, config, force=True)
+                self._schedule_end_of_day_reminder(user, config)
         # Progress records are keyed by day, so a stale one is replaced on the
         # next evaluation rather than cleared here.
         for slot, config in data.habits.items():
@@ -2707,7 +2784,7 @@ class HabitTracker(hass.Hass):
         self._seed_mood_reminder(user, force=True)
         self.store.save()
         self._publish_mood_state(user)
-        self._publish_mood_editor_discovery()
+        self._publish_mood_editor_discovery(user)
 
     def _normalize_user_slots(
         self,

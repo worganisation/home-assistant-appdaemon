@@ -2,6 +2,70 @@
 
 <!-- version list -->
 
+## v0.31.0 (2026-08-31)
+
+### Bug Fixes
+
+- Notify on qBittorrent cleanup threshold changes
+  ([#300](https://github.com/worganisation/home-assistant-appdaemon/pull/300),
+  [`332af47`](https://github.com/worganisation/home-assistant-appdaemon/commit/332af474d95590c2d70fb1110089ef067aabe767))
+
+### Chores
+
+- **sync**: Pin github-config-files workflows to 0.7.4
+  ([#298](https://github.com/worganisation/home-assistant-appdaemon/pull/298),
+  [`ce13b14`](https://github.com/worganisation/home-assistant-appdaemon/commit/ce13b14119ad9cedf146ce5c14453aaac85dc21c))
+
+### Features
+
+- Add end-of-day habit reminders
+  ([#297](https://github.com/worganisation/home-assistant-appdaemon/pull/297),
+  [`f13cb6a`](https://github.com/worganisation/home-assistant-appdaemon/commit/f13cb6a55b559b4929965c9bb008bb5770a30312))
+
+
+## v0.30.0 (2026-08-20)
+
+### Bug Fixes
+
+- Remove unused tempo update functionality
+  ([#293](https://github.com/worgarside/home-assistant-appdaemon/pull/293),
+  [`44fcf19`](https://github.com/worgarside/home-assistant-appdaemon/commit/44fcf19bce708a9f96806c8ddd0d1e71b636cba4))
+
+- Restart errored torrents after storage cleanup
+  ([#296](https://github.com/worgarside/home-assistant-appdaemon/pull/296),
+  [`a0e6cf3`](https://github.com/worgarside/home-assistant-appdaemon/commit/a0e6cf397bf7ad3fc6d23fdddb72b6b1119a66cd))
+
+### Build System
+
+- **deps**: Bump gitpython from 3.1.57 to 3.1.58
+  ([#289](https://github.com/worgarside/home-assistant-appdaemon/pull/289),
+  [`83d61b4`](https://github.com/worgarside/home-assistant-appdaemon/commit/83d61b44260d0960309f2e474fa861f2700e8c9a))
+
+### Chores
+
+- Configure semantic release remote options
+  ([`3938a01`](https://github.com/worgarside/home-assistant-appdaemon/commit/3938a0167ac4ea4d0dfe9be4941c4d4a7a2d43e5))
+
+- **sync**: Pin github-config-files workflows to 0.5.3
+  ([#288](https://github.com/worgarside/home-assistant-appdaemon/pull/288),
+  [`1f9b4f7`](https://github.com/worgarside/home-assistant-appdaemon/commit/1f9b4f75ff33092361bdd66f4dd6433f0b320803))
+
+- **sync**: Pin github-config-files workflows to 0.5.4
+  ([#295](https://github.com/worgarside/home-assistant-appdaemon/pull/295),
+  [`654c48b`](https://github.com/worgarside/home-assistant-appdaemon/commit/654c48b88192d30da8016235b3c10cb9a7e1303e))
+
+### Continuous Integration
+
+- Migrate to prek ([#290](https://github.com/worgarside/home-assistant-appdaemon/pull/290),
+  [`17f8e25`](https://github.com/worgarside/home-assistant-appdaemon/commit/17f8e250734355815666b78ac5511654d6620cd9))
+
+### Features
+
+- Add qbt storage cleanup integration
+  ([#294](https://github.com/worgarside/home-assistant-appdaemon/pull/294),
+  [`a58fe57`](https://github.com/worgarside/home-assistant-appdaemon/commit/a58fe573a2846253fec1f02f3c45c99f21105b19))
+
+
 ## v0.29.1 (2026-08-07)
 
 ### Bug Fixes

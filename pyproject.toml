@@ -1,6 +1,6 @@
 [project]
 name = "ha-appdaemon"
-version = "0.29.1"
+version = "0.31.0"
 description = ""
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
@@ -42,7 +42,7 @@ reportUnknownVariableType = "none"
 
 [tool.codespell]
 skip = '*.json,*.csv,*.xml,*.lock'
-ignore-words-list = "hass,ags"
+ignore-words-list = "hass,ags,checkin"
 
 [tool.semantic_release]
 tag_format = "{version}"
@@ -54,6 +54,9 @@ build_command = """
     uv lock --upgrade-package "$PACKAGE_NAME"
     git add uv.lock
   """
+
+[tool.semantic_release.remote]
+ignore_token_for_push = true
 
 [tool.semantic_release.commit_parser_options]
 allowed_tags = [

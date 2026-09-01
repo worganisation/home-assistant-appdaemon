@@ -99,6 +99,7 @@ class HabitConfig:
     repeat_interval_minutes: int = 60
     streak_min_days_per_week: int = 7
     ai_enabled: bool = False
+    end_of_day_reminder_enabled: bool = False
     icon_on: str = "mdi:check-circle"
     icon_active: str = "mdi:counter"
     icon_off: str = "mdi:circle-outline"
@@ -172,6 +173,11 @@ class HabitConfig:
                 7,
             ),
             ai_enabled=_boolean(value, "ai_enabled", default=False),
+            end_of_day_reminder_enabled=_boolean(
+                value,
+                "end_of_day_reminder_enabled",
+                default=False,
+            ),
             icon_on=_string(value, "icon_on", "mdi:check-circle"),
             icon_active=_string(value, "icon_active", "mdi:counter"),
             icon_off=_string(value, "icon_off", "mdi:circle-outline"),
@@ -353,6 +359,7 @@ class UserData:
     habits: dict[int, HabitConfig] = field(default_factory=dict)
     completions: dict[int, dict[str, int]] = field(default_factory=dict)
     pending_reminders: dict[int, PendingReminder] = field(default_factory=dict)
+    end_of_day_reminder_sent_days: dict[int, str] = field(default_factory=dict)
     template_progress: dict[int, TemplateProgress] = field(default_factory=dict)
     mood_checkins: list[MoodCheckIn] = field(default_factory=list)
     mood_note_draft: str = ""
@@ -362,6 +369,7 @@ class UserData:
     mood_context_cooldown_minutes: int = 90
     mood_last_context_prompt_at: str | None = None
     mood_calendar_decisions: dict[str, bool] = field(default_factory=dict)
+    mood_calendar_prompted: list[str] = field(default_factory=list)
     mood_away_since: str | None = None
     mood_away_saw_work: bool = False
     mood_reminder_time: str = "20:00:00"
@@ -390,14 +398,20 @@ class UserData:
             <= MAX_MOOD_CONTEXT_COOLDOWN
         ):
             raise ValueError("mood context cooldown must be between 15 and 360")
-        if len(self.mood_request_ids) > MAX_MOOD_REQUEST_IDS:
-            raise ValueError("too many retained mood request ids")
-        if len(self.mood_calendar_decisions) > MAX_MOOD_CALENDAR_DECISIONS:
-            raise ValueError("too many cached mood calendar decisions")
+        self._validate_retained_mood_state()
         if self.mood_last_context_prompt_at is not None:
             datetime.fromisoformat(self.mood_last_context_prompt_at)
         if self.mood_away_since is not None:
             datetime.fromisoformat(self.mood_away_since)
+
+    def _validate_retained_mood_state(self) -> None:
+        """Bound persisted request and calendar deduplication state."""
+        if len(self.mood_request_ids) > MAX_MOOD_REQUEST_IDS:
+            raise ValueError("too many retained mood request ids")
+        if len(self.mood_calendar_decisions) > MAX_MOOD_CALENDAR_DECISIONS:
+            raise ValueError("too many cached mood calendar decisions")
+        if len(self.mood_calendar_prompted) > MAX_MOOD_CALENDAR_DECISIONS:
+            raise ValueError("too many retained mood calendar prompt ids")
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize user data."""
@@ -412,6 +426,9 @@ class UserData:
                 str(slot): pending.to_dict()
                 for slot, pending in self.pending_reminders.items()
             },
+            "end_of_day_reminder_sent_days": {
+                str(slot): day for slot, day in self.end_of_day_reminder_sent_days.items()
+            },
             "template_progress": {
                 str(slot): progress.to_dict()
                 for slot, progress in self.template_progress.items()
@@ -424,6 +441,7 @@ class UserData:
             "mood_context_cooldown_minutes": self.mood_context_cooldown_minutes,
             "mood_last_context_prompt_at": self.mood_last_context_prompt_at,
             "mood_calendar_decisions": self.mood_calendar_decisions,
+            "mood_calendar_prompted": self.mood_calendar_prompted,
             "mood_away_since": self.mood_away_since,
             "mood_away_saw_work": self.mood_away_saw_work,
             "mood_reminder_time": self.mood_reminder_time,
@@ -456,6 +474,13 @@ class UserData:
             int(slot): PendingReminder.from_dict(_dict(item))
             for slot, item in _mapping(value, "pending_reminders").items()
         }
+        end_of_day_reminder_sent_days = {
+            int(slot): _date_string(day)
+            for slot, day in _mapping(
+                value,
+                "end_of_day_reminder_sent_days",
+            ).items()
+        }
         template_progress = {
             int(slot): TemplateProgress.from_dict(_dict(item))
             for slot, item in _mapping(value, "template_progress").items()
@@ -484,10 +509,16 @@ class UserData:
             isinstance(decision, bool) for decision in raw_calendar_decisions.values()
         ):
             raise TypeError("mood_calendar_decisions values must be booleans")
+        raw_calendar_prompted = value.get("mood_calendar_prompted", [])
+        if not isinstance(raw_calendar_prompted, list) or not all(
+            isinstance(item, str) for item in raw_calendar_prompted
+        ):
+            raise TypeError("mood_calendar_prompted must be a string list")
         return cls(
             habits=habits,
             completions=completions,
             pending_reminders=pending_reminders,
+            end_of_day_reminder_sent_days=end_of_day_reminder_sent_days,
             template_progress=template_progress,
             mood_checkins=mood_checkins,
             mood_note_draft=_string(value, "mood_note_draft", ""),
@@ -510,6 +541,7 @@ class UserData:
                 str(fingerprint): decision
                 for fingerprint, decision in raw_calendar_decisions.items()
             },
+            mood_calendar_prompted=list(raw_calendar_prompted),
             mood_away_since=_optional_string(value, "mood_away_since"),
             mood_away_saw_work=_boolean(
                 value,
@@ -538,7 +570,7 @@ def _migrate_1_to_2(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
-    """Convert one-value-per-day mood history to timestamped check-ins."""
+    """Convert mood history to check-ins and add end-of-day reminder state."""
     migrated = dict(value)
     users = _mapping(migrated, "users")
     migrated_users: dict[str, Any] = {}
@@ -598,6 +630,7 @@ def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
                 "mood_context_cooldown_minutes": 90,
                 "mood_last_context_prompt_at": None,
                 "mood_calendar_decisions": {},
+                "mood_calendar_prompted": [],
                 "mood_away_since": None,
                 "mood_away_saw_work": False,
             },
@@ -799,6 +832,7 @@ def normalize_spare_slot(data: UserData) -> tuple[int | None, tuple[int, ...]]:
         data.habits[spare_slot] = HabitConfig(slot=spare_slot)
         data.completions.pop(spare_slot, None)
         data.pending_reminders.pop(spare_slot, None)
+        data.end_of_day_reminder_sent_days.pop(spare_slot, None)
         data.template_progress.pop(spare_slot, None)
     else:
         spare_slot = 1
@@ -811,6 +845,7 @@ def normalize_spare_slot(data: UserData) -> tuple[int | None, tuple[int, ...]]:
         del data.habits[slot]
         data.completions.pop(slot, None)
         data.pending_reminders.pop(slot, None)
+        data.end_of_day_reminder_sent_days.pop(slot, None)
         data.template_progress.pop(slot, None)
     return added_spare, retired
 

@@ -35,6 +35,7 @@ Each slot exposes:
 - Repeat count and interval controls.
 - A minimum-days-per-week streak control.
 - An AI-reminder switch.
+- An opt-in end-of-day reminder switch.
 - Configurable icons for complete, incomplete, active, and zero states.
 - A streak sensor with completion age and 28-day completion rate attributes.
 
@@ -155,8 +156,17 @@ events remove the sibling notification where the mobile app exposes them.
 Notifications are sent through the user's configured `script.notify_*` script. Their
 action button either marks a binary habit complete or increments a countable habit.
 
+Each habit can also opt in to an independent end-of-day reminder with
+`switch.<user>_habit_<slot>_end_of_day_reminder`. At 23:55 local time, the app sends
+one final notification when that habit is still incomplete. This timer is derived
+from the fixed daily time rather than stored in `pending_reminders`, and it neither
+consumes nor changes the scheduled/repeating reminder chain. Enabling it after 23:55
+sends the check immediately if the habit is still incomplete.
+
 At local midnight, habit values reset while historical completions remain available
-for streak calculations. Mood draft state and reminder scheduling roll at 04:00.
+for streak calculations. Pending habit reminder chains are cleared and incomplete
+habits are re-seeded for the new day. Mood draft state and mood reminder scheduling
+roll at the 04:00 logical-day boundary instead.
 
 ## AI reminders
 
@@ -179,10 +189,12 @@ Mood context prompting is separate from reminder text generation. It starts only
 after the day's first check-in, uses a configurable 15–360 minute cooldown (90 minutes
 by default), coalesces triggers during the cooldown, and discards stale work. Calendar
 blocks ignore cancelled/all-day events, merge overlaps or gaps of up to 15 minutes,
-and use structured Qwen output to fail closed. Presence prompts fire 15 minutes after
-returning from work or after another outing lasting at least two hours. Outing state is
-persisted across AppDaemon restarts. Will's context prompts default on; Vic's scheduled
-and contextual prompts default off.
+and use structured Qwen output to fail closed. The classifier receives only sanitized
+event titles, calendar names, timing, duration, and recurrence metadata; descriptions
+and locations are never sent to it. Presence prompts fire 15 minutes after returning
+from work or after another outing lasting at least two hours. Outing state and sent
+calendar-block fingerprints are persisted across AppDaemon restarts. Will's context
+prompts default on; Vic's scheduled and contextual prompts default off.
 
 This implementation ports the behavior from the legacy Home Assistant
 `script.habit_send_reminder`. AppDaemon becomes the source of truth after cutover;
