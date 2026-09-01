@@ -107,6 +107,7 @@ class HabitConfig:
     completion_mode: CompletionMode = CompletionMode.MANUAL
     completion_template: str = ""
     completion_duration_minutes: int = 30
+    requirement_template: str = ""
 
     def __post_init__(self) -> None:
         """Reject malformed persisted or MQTT-provided configuration."""
@@ -143,6 +144,8 @@ class HabitConfig:
             and self.habit_type is not HabitType.BINARY
         ):
             raise ValueError("duration completion modes require a binary habit")
+        if len(self.requirement_template) > MAX_TEMPLATE_LENGTH:
+            raise ValueError("requirement_template is too long")
 
     @property
     def configured(self) -> bool:
@@ -191,6 +194,7 @@ class HabitConfig:
                 "completion_duration_minutes",
                 30,
             ),
+            requirement_template=_string(value, "requirement_template", ""),
         )
 
 
@@ -358,6 +362,7 @@ class UserData:
 
     habits: dict[int, HabitConfig] = field(default_factory=dict)
     completions: dict[int, dict[str, int]] = field(default_factory=dict)
+    not_required_days: dict[int, set[str]] = field(default_factory=dict)
     pending_reminders: dict[int, PendingReminder] = field(default_factory=dict)
     end_of_day_reminder_sent_days: dict[int, str] = field(default_factory=dict)
     template_progress: dict[int, TemplateProgress] = field(default_factory=dict)
@@ -422,6 +427,11 @@ class UserData:
             "completions": {
                 str(slot): values for slot, values in self.completions.items()
             },
+            "not_required_days": {
+                str(slot): sorted(days)
+                for slot, days in self.not_required_days.items()
+                if days
+            },
             "pending_reminders": {
                 str(slot): pending.to_dict()
                 for slot, pending in self.pending_reminders.items()
@@ -470,6 +480,10 @@ class UserData:
                 _date_string(day): _nonnegative_integer(count)
                 for day, count in _dict(entries).items()
             }
+        not_required_days = {
+            int(slot): {_date_string(day) for day in _string_list(days)}
+            for slot, days in _mapping(value, "not_required_days").items()
+        }
         pending_reminders = {
             int(slot): PendingReminder.from_dict(_dict(item))
             for slot, item in _mapping(value, "pending_reminders").items()
@@ -517,6 +531,7 @@ class UserData:
         return cls(
             habits=habits,
             completions=completions,
+            not_required_days=not_required_days,
             pending_reminders=pending_reminders,
             end_of_day_reminder_sent_days=end_of_day_reminder_sent_days,
             template_progress=template_progress,
@@ -570,7 +585,7 @@ def _migrate_1_to_2(value: dict[str, Any]) -> dict[str, Any]:
 
 
 def _migrate_2_to_3(value: dict[str, Any]) -> dict[str, Any]:
-    """Convert mood history to check-ins and add end-of-day reminder state."""
+    """Convert mood history and add conditional/end-of-day habit state."""
     migrated = dict(value)
     users = _mapping(migrated, "users")
     migrated_users: dict[str, Any] = {}
@@ -715,6 +730,8 @@ class StreakStats:
     streak: int
     days_since_completion: int
     completion_rate_28_days: float
+    compliance_rate_28_days: float
+    not_required_days_28: int
 
 
 def calculate_streak(
@@ -722,17 +739,20 @@ def calculate_streak(
     *,
     today: date,
     min_days_per_week: int,
+    not_required_days: set[str] | None = None,
 ) -> StreakStats:
-    """Calculate strict daily or weekly-qualified calendar-day streaks."""
+    """Calculate streak and completion metrics for required and skipped days."""
     completed = {
         date.fromisoformat(day) for day, count in completions.items() if count > 0
     }
-    anchor = today if today in completed else today - timedelta(days=1)
+    skipped = {date.fromisoformat(day) for day in (not_required_days or set())}
+    satisfied = completed | skipped
+    anchor = today if today in satisfied else today - timedelta(days=1)
     streak = (
-        _strict_daily_streak(completed, anchor)
+        _strict_daily_streak(satisfied, anchor)
         if min_days_per_week == MAX_DAYS_PER_WEEK
         else _weekly_streak(
-            completed,
+            satisfied,
             anchor=anchor,
             today=today,
             min_days_per_week=min_days_per_week,
@@ -744,7 +764,25 @@ def calculate_streak(
         today - timedelta(days=27) <= completed_day <= today
         for completed_day in completed
     )
-    return StreakStats(streak, days_since, round(completed_28 / 28 * 100, 1))
+    skipped_28 = sum(
+        today - timedelta(days=27) <= skipped_day <= today for skipped_day in skipped
+    )
+    completed_required_28 = sum(
+        today - timedelta(days=27) <= completed_day <= today
+        and completed_day not in skipped
+        for completed_day in completed
+    )
+    required_28 = 28 - skipped_28
+    compliance_rate = (
+        100.0 if required_28 == 0 else round(completed_required_28 / required_28 * 100, 1)
+    )
+    return StreakStats(
+        streak,
+        days_since,
+        round(completed_28 / 28 * 100, 1),
+        compliance_rate,
+        skipped_28,
+    )
 
 
 def logical_date_for(value: datetime) -> date:
@@ -831,6 +869,7 @@ def normalize_spare_slot(data: UserData) -> tuple[int | None, tuple[int, ...]]:
         # not inherit its old completion mode, template, icons, or reminders.
         data.habits[spare_slot] = HabitConfig(slot=spare_slot)
         data.completions.pop(spare_slot, None)
+        data.not_required_days.pop(spare_slot, None)
         data.pending_reminders.pop(spare_slot, None)
         data.end_of_day_reminder_sent_days.pop(spare_slot, None)
         data.template_progress.pop(spare_slot, None)
@@ -844,6 +883,7 @@ def normalize_spare_slot(data: UserData) -> tuple[int | None, tuple[int, ...]]:
     for slot in retired:
         del data.habits[slot]
         data.completions.pop(slot, None)
+        data.not_required_days.pop(slot, None)
         data.pending_reminders.pop(slot, None)
         data.end_of_day_reminder_sent_days.pop(slot, None)
         data.template_progress.pop(slot, None)
@@ -952,6 +992,12 @@ def _date_string(value: object) -> str:
     if not isinstance(value, str):
         raise TypeError("date key must be a string")
     date.fromisoformat(value)
+    return value
+
+
+def _string_list(value: object) -> list[str]:
+    if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+        raise TypeError("expected a list of strings")
     return value
 
 
