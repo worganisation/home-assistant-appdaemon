@@ -14,7 +14,7 @@ record per Cursor account under the configured `account_store_path`, currently
 `/data/cursor/accounts`. The add-on's private `/data` directory persists across
 restarts and upgrades without placing runtime credentials in Home Assistant's shared
 configuration or the AppDaemon repository. `/data/cursor/session_token` is only the
-legacy single-account source read once by `_migrate_legacy_token` during migration.
+retired single-account token path and is not read by the multi-account monitor.
 
 ## Install
 

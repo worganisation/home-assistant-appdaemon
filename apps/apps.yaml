@@ -27,8 +27,6 @@ cursor_usage_monitor:
   class: CursorUsageMonitor
   poll_interval_seconds: 300
   account_store_path: /data/cursor/accounts
-  legacy_account_email: !secret primary_gmail_address
-  publish_legacy_derived_sensors: false
 
   mqtt_host: !secret appdaemon_mqtt_host
   mqtt_port: 1883
