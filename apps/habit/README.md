@@ -236,14 +236,6 @@ storage schema. Optional contextual prompts fail closed unless the receptivity h
 is explicitly on; missing, unknown, or unavailable state is never treated as safe for
 context delivery.
 
-The dormant `backplane_contract` module mirrors the verified context-capture request
-boundary while the Backplane branch is awaiting merge. It defines event ingestion,
-prompt evaluation, delivery, response, dismissal and expiry payloads, but performs no
-HTTP calls and is not wired into the tracker. Future mood records retain only canonical
-Backplane event, prompt and response IDs through `CaptureReferenceIds`; they do not copy
-detection, delivery or response context snapshots. The retrying outbox and runtime
-serialization remain gated on the Backplane API merge.
-
 `binary_sensor.will_call_activity` is intentionally only a conservative receptivity blocker:
 the available Mac microphone/camera signals can also represent dictation or camera use,
 so its transitions are not journal facts. Direct sleep gating is likewise deferred:
