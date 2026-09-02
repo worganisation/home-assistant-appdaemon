@@ -93,6 +93,16 @@ habit_tracker:
       dashboard_url: /home-will/health-fitness
       mood_reminders_default: true
       mood_context_prompts_default: true
+      mood_receptive_entity: binary_sensor.will_mood_prompt_receptive
+      mood_context_end_triggers:
+        focus_end:
+          entity_id: binary_sensor.wills_macbook_pro_focus
+          reason: after a focus session
+          mode: shadow
+        exercise_end:
+          entity_id: binary_sensor.will_exercising
+          reason: after exercising
+          mode: shadow
       person_entity: person.will
       at_work_entity: binary_sensor.will_at_work
       workday_entity: binary_sensor.workday

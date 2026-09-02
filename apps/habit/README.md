@@ -168,6 +168,13 @@ A mood reminder is also skipped once the logical day's first check-in is recorde
 and the pending chain is cleared at that point. The 04:00 rollover re-seeds an
 incomplete mood check-in when reminders are enabled.
 
+When a user has a `mood_receptive_entity`, scheduled mood reminders wait while that
+entity is off. AppDaemon rechecks every 15 minutes and resumes immediately when the
+entity turns on. A reminder that remains blocked expires at 22:00 local time rather
+than carrying into the night. A manual check-in still clears the pending reminder.
+Missing, unknown, or unavailable receptivity state fails open so a deployment-order
+problem cannot suppress every reminder.
+
 Mood prompts are sent as a grouped low/neutral notification and a grouped positive
 notification. Both expire after 15 minutes and open the user's dashboard. Choosing a
 mood clears the pair, creates exactly one check-in through the shared write path, and
@@ -219,6 +226,22 @@ threshold (120 minutes by default). The threshold is configurable from 110 to 14
 minutes in 10-minute increments. Outing state and sent calendar-block fingerprints are
 persisted across AppDaemon restarts. Will's context prompts default on; Vic's scheduled
 and contextual prompts default off.
+
+Additional binary end-transition sources are configured under
+`mood_context_end_triggers`. They default to `shadow`, which logs a candidate but never
+sends a notification or persists an event. Will's focus and exercise sources remain in
+shadow until Backplane owns the canonical event and prompt records. The local
+`ContextCandidate` is deliberately an operational object, not a Backplane request or
+storage schema.
+
+`binary_sensor.will_call_activity` is intentionally only a conservative receptivity blocker:
+the available Mac microphone/camera signals can also represent dictation or camera use,
+so its transitions are not journal facts. Direct sleep gating is likewise deferred:
+the Android sleep-confidence value changes throughout the day and sleep-duration is
+currently always zero. The 08:00–22:00 window and DND state are the current sleep
+proxies. Raw calendar on/off state is not used as a meeting blocker because all-day
+events can hold it on; active microphone/camera state provides the conservative
+interruption gate instead.
 
 This implementation ports the behavior from the legacy Home Assistant
 `script.habit_send_reminder`. AppDaemon becomes the source of truth after cutover;

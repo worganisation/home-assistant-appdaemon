@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Will Garside
 """Disk-backed, MQTT-discovered habit and mood tracker."""
 
 from __future__ import annotations
@@ -13,6 +14,15 @@ from typing import Any, Final, cast
 
 import appdaemon.plugins.hass.hassapi as hass
 
+from .context import (
+    ContextCandidate,
+    ContextEndTrigger,
+    ContextTriggerMode,
+    context_prompt_message,
+    next_receptivity_retry_at,
+    parse_context_end_triggers,
+    should_coalesce,
+)
 from .models import (
     LOGICAL_DAY_BOUNDARY_HOUR,
     MAX_DURATION_MINUTES,
@@ -143,7 +153,7 @@ class HabitTracker(hass.Hass):
 
     mqtt: HabitMqtt | None
 
-    def initialize(self) -> None:
+    def initialize(self) -> None:  # noqa: C901, PLR0915
         """Load disk state and start integrations."""
         self.users = tuple(str(user).lower() for user in self.args.get("users", ()))
         if not self.users:
@@ -218,6 +228,14 @@ class HabitTracker(hass.Hass):
         self._calendar_scheduled: set[str] = set()
         self._context_timers: dict[str, str] = {}
         self._pending_context: dict[str, dict[str, object]] = {}
+        self._context_recent_occurrences: dict[str, datetime] = {}
+        self._mood_receptivity_deferred: set[str] = set()
+        self._context_end_triggers = {
+            user: parse_context_end_triggers(
+                self._user_config(user).get("mood_context_end_triggers"),
+            )
+            for user in self.users
+        }
         for user in self.users:
             now = self._aware_now()
             self._mood_editor[user] = {
@@ -250,6 +268,20 @@ class HabitTracker(hass.Hass):
                 str(self._user_config(user)["at_work_entity"]),
                 user=user,
             )
+            receptive_entity = self._user_config(user).get("mood_receptive_entity")
+            if isinstance(receptive_entity, str) and receptive_entity:
+                self.listen_state(
+                    self._context_receptivity_changed,
+                    receptive_entity,
+                    user=user,
+                )
+            for trigger in self._context_end_triggers[user]:
+                self.listen_state(
+                    self._context_end_trigger_changed,
+                    trigger.entity_id,
+                    user=user,
+                    trigger=trigger,
+                )
         self.run_every(
             self._scan_context_calendars,
             "now+60",
@@ -1385,6 +1417,8 @@ class HabitTracker(hass.Hass):
 
     def _clear_mood_pending(self, user: str) -> None:
         self.reminders.cancel_mood(user)
+        with suppress(AttributeError):
+            self._mood_receptivity_deferred.discard(user)
         self.store.data.users[user].pending_mood_reminder = None
         self._publish_mood_next_reminder(user)
 
@@ -2015,6 +2049,24 @@ class HabitTracker(hass.Hass):
             return
         now = self._aware_now()
         last_index = final_index or data.mood_repeat_count + 1
+        if not self._mood_receptive(user):
+            retry_at = next_receptivity_retry_at(now)
+            if retry_at is None:
+                self._clear_mood_pending(user)
+                self.log("Expired unreceptive mood reminder for %s at 22:00", user)
+            else:
+                pending = PendingReminder(
+                    fire_at=self._utc_isoformat(retry_at),
+                    next_index=reminder_index,
+                    final_index=last_index,
+                )
+                data.pending_mood_reminder = pending
+                self._mood_receptivity_deferred.add(user)
+                self._arm_mood_pending(user, pending)
+                self.log("Deferred mood reminder for %s until receptive", user)
+            self.store.save()
+            self._publish_mood_next_reminder(user)
+            return
         next_index = reminder_index + 1
         if next_index <= last_index and repeat_fits_before_logical_day_end(
             now,
@@ -2433,9 +2485,82 @@ class HabitTracker(hass.Hass):
             data.mood_away_saw_work = True
             self.store.save()
 
+    def _context_receptivity_changed(
+        self,
+        entity: str,
+        attribute: str,
+        old: object,
+        new: object,
+        **kwargs: Any,
+    ) -> None:
+        """Release locally deferred work as soon as Will becomes receptive."""
+        del entity, attribute, old
+        if new != "on":
+            return
+        user = str(kwargs["user"])
+        if user in self._mood_receptivity_deferred:
+            self._mood_receptivity_deferred.discard(user)
+            pending = self.store.data.users[user].pending_mood_reminder
+            if pending is not None:
+                self.reminders.cancel_mood(user)
+                self._send_mood_reminder(
+                    user,
+                    pending.next_index,
+                    final_index=pending.final_index,
+                )
+        if user in self._pending_context and user not in self._context_timers:
+            self._context_prompt_callback({"user": user})
+
+    def _context_end_trigger_changed(
+        self,
+        entity: str,
+        attribute: str,
+        old: object,
+        new: object,
+        **kwargs: Any,
+    ) -> None:
+        """Convert configured on-to-off signals into operational candidates."""
+        del entity, attribute
+        trigger = kwargs.get("trigger")
+        if not isinstance(trigger, ContextEndTrigger):
+            return
+        candidate = trigger.candidate(
+            user=str(kwargs["user"]),
+            old=old,
+            new=new,
+            occurred_at=self._aware_now(),
+        )
+        if candidate is not None:
+            self._handle_context_candidate(candidate)
+
+    def _handle_context_candidate(self, candidate: ContextCandidate) -> None:
+        """Keep new sources in shadow mode until Backplane owns evaluation."""
+        if candidate.mode is ContextTriggerMode.SHADOW:
+            self.log(
+                "Mood context shadow candidate for %s: %s from %s",
+                candidate.user,
+                candidate.kind,
+                candidate.source_entity,
+            )
+            return
+        self._queue_context_prompt(
+            candidate.user,
+            kind=candidate.kind,
+            reason=candidate.reason,
+            occurred_at=candidate.occurred_at,
+        )
+
+    def _mood_receptive(self, user: str) -> bool:
+        entity_id = self._user_config(user).get("mood_receptive_entity")
+        if not isinstance(entity_id, str) or not entity_id:
+            return True
+        state = self.get_state(entity_id)
+        return state != "off" if state in {"on", "off"} else True
+
     def _return_home_prompt_callback(self, kwargs: dict[str, Any]) -> None:
         self._queue_context_prompt(
             str(kwargs["user"]),
+            kind="return_home",
             reason=str(kwargs["reason"]),
             occurred_at=datetime.fromisoformat(str(kwargs["occurred_at"])),
         )
@@ -2677,6 +2802,7 @@ class HabitTracker(hass.Hass):
             self.store.save()
         self._queue_context_prompt(
             user,
+            kind="calendar_end",
             reason="after a reflection-worthy calendar block",
             occurred_at=datetime.fromisoformat(str(kwargs["occurred_at"])),
         )
@@ -2685,6 +2811,7 @@ class HabitTracker(hass.Hass):
         self,
         user: str,
         *,
+        kind: str,
         reason: str,
         occurred_at: datetime,
     ) -> None:
@@ -2693,6 +2820,17 @@ class HabitTracker(hass.Hass):
         if not data.mood_context_prompts_enabled or now - occurred_at > timedelta(
             minutes=CONTEXT_STALE_MINUTES,
         ):
+            return
+        if should_coalesce(self._context_recent_occurrences.get(user), occurred_at):
+            self.log("Coalesced nearby mood context candidate for %s: %s", user, kind)
+            return
+        if not self._mood_receptive(user):
+            self._pending_context[user] = {
+                "kind": kind,
+                "reason": reason,
+                "occurred_at": occurred_at.isoformat(),
+            }
+            self.log("Deferred mood context candidate for %s until receptive", user)
             return
         last_prompt = (
             None
@@ -2703,9 +2841,11 @@ class HabitTracker(hass.Hass):
         )
         cooldown = timedelta(minutes=data.mood_context_cooldown_minutes)
         if last_prompt is None or now - last_prompt >= cooldown:
-            self._send_context_prompt(user)
+            self._send_context_prompt(user, kind=kind)
+            self._context_recent_occurrences[user] = occurred_at
             return
         self._pending_context[user] = {
+            "kind": kind,
             "reason": reason,
             "occurred_at": occurred_at.isoformat(),
         }
@@ -2726,15 +2866,13 @@ class HabitTracker(hass.Hass):
         occurred_at = datetime.fromisoformat(str(pending["occurred_at"]))
         self._queue_context_prompt(
             user,
+            kind=str(pending["kind"]),
             reason=str(pending["reason"]),
             occurred_at=occurred_at,
         )
 
-    def _send_context_prompt(self, user: str) -> None:
-        self._notify_mood(
-            user,
-            "How are you feeling now? A quick check-in can capture how this part of your day landed.",
-        )
+    def _send_context_prompt(self, user: str, *, kind: str) -> None:
+        self._notify_mood(user, context_prompt_message(kind))
         data = self.store.data.users[user]
         data.mood_last_context_prompt_at = datetime.now(UTC).isoformat()
         self.store.save()
@@ -2998,7 +3136,7 @@ class HabitTracker(hass.Hass):
             self._published_template_attributes.pop((user, slot), None)
         return added_spare, retired
 
-    def _validate_config(self) -> bool:  # noqa: C901, PLR0912
+    def _validate_config(self) -> bool:  # noqa: C901, PLR0912, PLR0915
         errors: list[str] = []
         if len(set(self.users)) != len(self.users):
             errors.append("users (duplicates)")
@@ -3044,6 +3182,17 @@ class HabitTracker(hass.Hass):
                     for key in REQUIRED_USER_KEYS
                     if not isinstance(config.get(key), str) or not config[key]
                 )
+                receptive_entity = config.get("mood_receptive_entity")
+                if receptive_entity is not None and (
+                    not isinstance(receptive_entity, str) or not receptive_entity
+                ):
+                    errors.append(f"user_config.{user}.mood_receptive_entity")
+                try:
+                    parse_context_end_triggers(
+                        config.get("mood_context_end_triggers"),
+                    )
+                except (TypeError, ValueError):
+                    errors.append(f"user_config.{user}.mood_context_end_triggers")
         labels = self.args.get("context_labels")
         if not isinstance(labels, dict):
             errors.append("context_labels")
