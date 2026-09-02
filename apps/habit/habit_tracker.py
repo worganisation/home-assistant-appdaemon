@@ -2049,7 +2049,7 @@ class HabitTracker(hass.Hass):
             return
         now = self._aware_now()
         last_index = final_index or data.mood_repeat_count + 1
-        if not self._mood_receptive(user):
+        if not self._baseline_mood_receptive(user):
             retry_at = next_receptivity_retry_at(now)
             if retry_at is None:
                 self._clear_mood_pending(user)
@@ -2550,12 +2550,20 @@ class HabitTracker(hass.Hass):
             occurred_at=candidate.occurred_at,
         )
 
-    def _mood_receptive(self, user: str) -> bool:
+    def _mood_receptivity_state(self, user: str) -> str | None:
         entity_id = self._user_config(user).get("mood_receptive_entity")
         if not isinstance(entity_id, str) or not entity_id:
-            return True
+            return None
         state = self.get_state(entity_id)
-        return state != "off" if state in {"on", "off"} else True
+        return state if isinstance(state, str) else None
+
+    def _baseline_mood_receptive(self, user: str) -> bool:
+        """Fail open when the helper is missing so the daily baseline survives."""
+        return self._mood_receptivity_state(user) != "off"
+
+    def _context_mood_receptive(self, user: str) -> bool:
+        """Fail closed for optional prompts unless receptivity is explicit."""
+        return self._mood_receptivity_state(user) == "on"
 
     def _return_home_prompt_callback(self, kwargs: dict[str, Any]) -> None:
         self._queue_context_prompt(
@@ -2824,7 +2832,7 @@ class HabitTracker(hass.Hass):
         if should_coalesce(self._context_recent_occurrences.get(user), occurred_at):
             self.log("Coalesced nearby mood context candidate for %s: %s", user, kind)
             return
-        if not self._mood_receptive(user):
+        if not self._context_mood_receptive(user):
             self._pending_context[user] = {
                 "kind": kind,
                 "reason": reason,

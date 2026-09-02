@@ -43,7 +43,7 @@ class MoodReceptivityTest(unittest.TestCase):
     def test_blocked_baseline_is_deferred_without_consuming_attempt(self) -> None:
         """An unreceptive 17:00 reminder retries the same attempt at 17:15."""
         tracker = self._tracker(datetime(2026, 9, 2, 17, tzinfo=UTC))
-        tracker._mood_receptive = Mock(return_value=False)
+        tracker._baseline_mood_receptive = Mock(return_value=False)
 
         tracker._send_mood_reminder("will", 1)
 
@@ -55,22 +55,57 @@ class MoodReceptivityTest(unittest.TestCase):
         self.assertIn("will", tracker._mood_receptivity_deferred)
         tracker._notify_mood.assert_not_called()
 
-    def test_unknown_receptivity_fails_open(self) -> None:
-        """A missing HA helper cannot suppress every reminder after deployment."""
-        tracker = self._tracker(datetime(2026, 9, 2, 17, tzinfo=UTC))
-        tracker._user_config = Mock(
-            return_value={
-                "mood_receptive_entity": "binary_sensor.will_mood_prompt_receptive",
-            },
-        )
-        tracker.get_state = Mock(return_value="unknown")
+    def test_unknown_and_unavailable_receptivity_fail_open_for_baseline(self) -> None:
+        """A broken helper cannot suppress the guaranteed daily reminder."""
+        for state in ("unknown", "unavailable"):
+            with self.subTest(state=state):
+                tracker = self._tracker(datetime(2026, 9, 2, 17, tzinfo=UTC))
+                tracker._user_config = Mock(
+                    return_value={
+                        "mood_receptive_entity": (
+                            "binary_sensor.will_mood_prompt_receptive"
+                        ),
+                    },
+                )
+                tracker.get_state = Mock(return_value=state)
 
-        self.assertTrue(tracker._mood_receptive("will"))
+                tracker._send_mood_reminder("will", 1)
+
+                tracker._notify_mood.assert_called_once_with(
+                    "will",
+                    MOOD_FALLBACK_MESSAGE,
+                )
+
+    def test_unknown_and_unavailable_receptivity_fail_closed_for_context(self) -> None:
+        """Optional contextual prompts require an explicitly receptive state."""
+        for state in ("unknown", "unavailable"):
+            with self.subTest(state=state):
+                tracker = self._tracker(datetime(2026, 9, 2, 17, tzinfo=UTC))
+                tracker.store.data.users["will"].mood_context_prompts_enabled = True
+                tracker._user_config = Mock(
+                    return_value={
+                        "mood_receptive_entity": (
+                            "binary_sensor.will_mood_prompt_receptive"
+                        ),
+                    },
+                )
+                tracker.get_state = Mock(return_value=state)
+                tracker._send_context_prompt = Mock()
+
+                tracker._queue_context_prompt(
+                    "will",
+                    kind="return_home",
+                    reason="returning home",
+                    occurred_at=datetime(2026, 9, 2, 16, 55, tzinfo=UTC),
+                )
+
+                self.assertIn("will", tracker._pending_context)
+                tracker._send_context_prompt.assert_not_called()
 
     def test_receptive_transition_sends_deferred_baseline_immediately(self) -> None:
         """The HA receptivity sensor releases a deferred reminder without polling."""
         tracker = self._tracker(datetime(2026, 9, 2, 17, 5, tzinfo=UTC))
-        tracker._mood_receptive = Mock(side_effect=[False, True])
+        tracker._baseline_mood_receptive = Mock(side_effect=[False, True])
         tracker._send_mood_reminder("will", 1)
 
         tracker._context_receptivity_changed(
@@ -87,7 +122,7 @@ class MoodReceptivityTest(unittest.TestCase):
     def test_blocked_baseline_expires_at_ten_pm(self) -> None:
         """No scheduled reminder survives the agreed 22:00 cutoff."""
         tracker = self._tracker(datetime(2026, 9, 2, 22, tzinfo=UTC))
-        tracker._mood_receptive = Mock(return_value=False)
+        tracker._baseline_mood_receptive = Mock(return_value=False)
         tracker.store.data.users["will"].pending_mood_reminder = PendingReminder(
             fire_at="2026-09-02T22:00:00+00:00",
             next_index=1,
@@ -102,7 +137,7 @@ class MoodReceptivityTest(unittest.TestCase):
     def test_receptive_transition_re_evaluates_pending_context(self) -> None:
         """A blocked context candidate is popped and run through current gates again."""
         tracker = self._tracker(datetime(2026, 9, 2, 18, tzinfo=UTC))
-        tracker._mood_receptive = Mock(return_value=True)
+        tracker._context_mood_receptive = Mock(return_value=True)
         tracker._pending_context["will"] = {
             "kind": "return_home",
             "reason": "returning home",

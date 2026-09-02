@@ -172,8 +172,8 @@ When a user has a `mood_receptive_entity`, scheduled mood reminders wait while t
 entity is off. AppDaemon rechecks every 15 minutes and resumes immediately when the
 entity turns on. A reminder that remains blocked expires at 22:00 local time rather
 than carrying into the night. A manual check-in still clears the pending reminder.
-Missing, unknown, or unavailable receptivity state fails open so a deployment-order
-problem cannot suppress every reminder.
+For this guaranteed daily baseline only, missing, unknown, or unavailable receptivity
+state fails open so a deployment-order problem cannot suppress every reminder.
 
 Mood prompts are sent as a grouped low/neutral notification and a grouped positive
 notification. Both expire after 15 minutes and open the user's dashboard. Choosing a
@@ -232,7 +232,9 @@ Additional binary end-transition sources are configured under
 sends a notification or persists an event. Will's focus and exercise sources remain in
 shadow until Backplane owns the canonical event and prompt records. The local
 `ContextCandidate` is deliberately an operational object, not a Backplane request or
-storage schema.
+storage schema. Optional contextual prompts fail closed unless the receptivity helper
+is explicitly on; missing, unknown, or unavailable state is never treated as safe for
+context delivery.
 
 `binary_sensor.will_call_activity` is intentionally only a conservative receptivity blocker:
 the available Mac microphone/camera signals can also represent dictation or camera use,
