@@ -68,7 +68,8 @@ metadata available and retain previous explanations with their generation status
 
 Repair-specific guidance distinguishes obsolete statistics and configuration references
 from device failures. Output uses compact facts and fragments, without introductory
-narration or generic disclaimers. Steps contain one to three numbered actions, without
+narration or generic disclaimers. The prompt targets one to three numbered actions;
+validation accepts up to five to avoid rejecting useful longer procedures, without
 a minimum sentence length or required final punctuation. Each field has a strict
 character limit. Prompt version changes invalidate cached analyses.
 Navigation and its action share a step. Optional fields use `None` when there is

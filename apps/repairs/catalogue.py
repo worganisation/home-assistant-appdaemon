@@ -18,9 +18,9 @@ MAX_NOTE_LENGTH = 255
 MAX_ATTEMPTS = 3
 SAMPLE_SIZE = 8
 MIN_STEPS = 1
-MAX_STEPS = 3
+MAX_STEPS = 5
 
-PROMPT_VERSION = "7"
+PROMPT_VERSION = "8"
 FIELDS = (
     "title",
     "explanation",
@@ -224,7 +224,7 @@ def validate_analysis(value: object) -> dict[str, str]:
                 for index, step in enumerate(steps, 1)
             ):
                 raise AnalysisValidationError(
-                    "Steps must contain one to three nonempty numbered lines",
+                    "Steps must contain one to five nonempty numbered lines",
                 )
         result[field] = clean_text(text.strip(), LIMITS[field])
     return result
