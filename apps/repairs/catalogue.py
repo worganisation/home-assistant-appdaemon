@@ -18,9 +18,9 @@ MAX_NOTE_LENGTH = 255
 MAX_ATTEMPTS = 3
 SAMPLE_SIZE = 8
 MIN_STEPS = 1
-MAX_STEPS = 5
+MAX_STEPS = 3
 
-PROMPT_VERSION = "5"
+PROMPT_VERSION = "6"
 FIELDS = (
     "title",
     "explanation",
@@ -156,6 +156,7 @@ def model_input(value: dict[str, Any]) -> dict[str, Any]:
         result.pop(key, None)
     repair = result["repair"]
     repair.pop("source_fingerprint", None)
+    repair.pop("issue_id", None)
     for key, raw in repair["translation_placeholders"].items():
         text = re.sub(r"\(did you mean[^)]*\)", "", str(raw), flags=re.IGNORECASE)
         repair["translation_placeholders"][key] = text
@@ -193,7 +194,7 @@ def validate_analysis(value: object) -> dict[str, str]:
                 for index, step in enumerate(steps, 1)
             ):
                 raise AnalysisValidationError(
-                    "Steps must contain one to five nonempty numbered lines",
+                    "Steps must contain one to three nonempty numbered lines",
                 )
         result[field] = clean_text(text.strip(), LIMITS[field])
     return result

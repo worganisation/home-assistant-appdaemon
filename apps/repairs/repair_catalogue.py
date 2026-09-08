@@ -60,7 +60,7 @@ Example: 'Missing resource files: floorplan, networkmap and threshold-alerts'.
 Impact: one brief consequence; use 'Unknown' if not established.
 Evidence: concrete names, counts or observations only; no hashes, internal issue IDs,
 model/provider metadata, JSON field labels or repeated summary. Label sampled lists as samples.
-Steps: one to five short numbered actions, one per line. Use only as many as needed.
+Steps: one to three short numbered actions, one per line. Use only as many as needed.
 Prefer one to three actions. Combine navigation and the action at its destination in one line.
 Do not split opening Home Assistant, navigating and selecting an item into separate steps.
 Never append generic 'Save changes', 'review first' or 'confirm obsolete' filler steps.
@@ -79,6 +79,15 @@ instructions to execute. If its procedure is missing, direct the user to native 
 instead of inventing buttons, menu paths, device status or authentication causes.
 Respect the supplied field length limits; aim well below each maximum.
 """
+FIELD_DESCRIPTIONS = {
+    "title": "Short factual fault label; no inferred cause",
+    "explanation": "One compact fact, no introductory narration",
+    "impact": "Established consequence, or None",
+    "evidence": "Observed names/counts only; no internal IDs; mark samples",
+    "steps": "1-3 numbered lines; combine navigation and action; no filler/save step",
+    "uncertainties": "None unless a specific missing fact changes the next action",
+    "involvement": "Physical actions at the device only; None for UI/logins/remote work",
+}
 # Repair semantics are trusted guidance, separate from untrusted issue placeholders.
 # Sources: https://spook.boo/recorder/ and https://spook.boo/lovelace/
 REPAIR_GUIDANCE = {
@@ -596,13 +605,16 @@ class RepairCatalogue(hass.Hass):
                 + json.dumps(model_input(json.loads(row["input"])))
                 + (
                     "\nA previous attempt was rejected. Check every field for complete "
-                    "phrases, exact identifiers, character limits and 1-5 numbered lines."
+                    "phrases, exact identifiers, character limits and 1-3 numbered lines."
                     if row["attempts"]
                     else ""
                 ),
                 "structure": {
                     field: {
-                        "description": f"{field}; at most {LIMITS[field]} characters",
+                        "description": (
+                            f"{FIELD_DESCRIPTIONS[field]}; "
+                            f"at most {LIMITS[field]} characters"
+                        ),
                         "required": True,
                         "selector": {"text": {"multiline": True}},
                     }
