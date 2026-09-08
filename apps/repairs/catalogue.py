@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 MAX_NOTE_LENGTH = 255
 MAX_ATTEMPTS = 3
 
-PROMPT_VERSION = "1"
+PROMPT_VERSION = "2"
 FIELDS = (
     "title",
     "explanation",
@@ -30,12 +30,12 @@ FIELDS = (
 ENTITY_PATTERN = re.compile(r"\b([a-z_]+\.[a-z0-9_]+)\b")
 LIMITS = {
     "title": 120,
-    "explanation": 1200,
-    "impact": 600,
-    "evidence": 1600,
-    "steps": 2000,
-    "uncertainties": 800,
-    "involvement": 400,
+    "explanation": 500,
+    "impact": 280,
+    "evidence": 500,
+    "steps": 1000,
+    "uncertainties": 320,
+    "involvement": 240,
 }
 KITCHEN_KEY = "spook:lovelace_unknown_entity_references_dashboard-mobile"
 KITCHEN_NOTE = (

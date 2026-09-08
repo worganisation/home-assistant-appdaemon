@@ -56,6 +56,16 @@ repairs and context and rejects a stale fingerprint or a no-longer-active repair
 Opening the dashboard never triggers generation. Provider failures leave repair
 metadata available and retain previous explanations with their generation status.
 
+Repair-specific guidance distinguishes obsolete statistics and configuration references
+from device failures. Explanations target one or two sentences and three to five
+numbered resolution steps; each field has a strict character limit. Suggestions
+remain advisory and require review. Prompt version changes invalidate cached analyses.
+
+INFO logs record refresh duration, active/pending/failed counts, cache hits, generation
+duration, attempt number, retry delay and stale-output rejection. A cache hit is an
+active record with a ready analysis matching its current input fingerprint. Log
+references are hashes of repair keys; prompts, notes and generated text are omitted.
+
 ## MQTT contract
 
 Retained discovery under `homeassistant` creates `sensor.ai_repairs`,
