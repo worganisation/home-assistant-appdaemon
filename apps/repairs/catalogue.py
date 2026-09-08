@@ -165,28 +165,32 @@ def model_input(value: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+class AnalysisValidationError(ValueError):
+    """A safe validation reason containing no model or user text."""
+
+
 def validate_analysis(value: object) -> dict[str, str]:
     """Accept complete, bounded structured output only."""
     if not isinstance(value, dict):
-        raise TypeError("AI response must be an object")
+        raise AnalysisValidationError("AI response must be an object")
     result = {}
     for field in FIELDS:
         text = value.get(field)
         if not isinstance(text, str) or not text.strip() or len(text) > LIMITS[field]:
-            raise ValueError(f"Invalid AI field: {field}")
+            raise AnalysisValidationError(f"Invalid AI field: {field}")
         if (
             field != "title"
             and text.strip() != "None identified"
             and not re.search(r"[.!?][\"'\u2019\u201d)]?$", text.strip())
         ):
-            raise ValueError(f"Incomplete AI field: {field}")
+            raise AnalysisValidationError(f"Incomplete AI field: {field}")
         if field == "steps":
             steps = text.strip().splitlines()
             if not MIN_STEPS <= len(steps) <= MAX_STEPS or any(
                 not re.fullmatch(rf"{index}\. .+[.!?]", step.strip())
                 for index, step in enumerate(steps, 1)
             ):
-                raise ValueError(
+                raise AnalysisValidationError(
                     "Steps must contain three to five complete numbered sentences",
                 )
         result[field] = clean_text(text.strip(), LIMITS[field])

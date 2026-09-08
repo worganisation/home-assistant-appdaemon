@@ -20,6 +20,7 @@ from .catalogue import (
     FIELDS,
     LIMITS,
     PROMPT_VERSION,
+    AnalysisValidationError,
     Catalogue,
     clean_text,
     entity_references,
@@ -79,7 +80,10 @@ REPAIR_GUIDANCE = {
     ("spook", "lovelace_unknown_entity_references"): (
         "This repair concerns a dashboard reference to an entity that is absent. "
         "Distinguish a stale card from an unintentionally missing entity. Respect user "
-        "notes about restoration and forbidden substitutions. Restoring the same entity "
+        "notes about restoration and forbidden substitutions. If notes request re-pairing "
+        "or restoring the original device, preserve its dashboard references: recommend "
+        "restoring that device, not removing its cards. User constraints override generic "
+        "removal advice in the native repair description. Restoring the same entity "
         "ID does not require changing the dashboard reference."
     ),
     ("spook", "unknown_customized_entities"): (
@@ -314,6 +318,11 @@ class RepairCatalogue(hass.Hass):
             "entities_omitted": max(0, len(references) - limit),
             "unverified_suggestions": sorted(suggestions)[:MAX_REFERENCES],
         }
+        guidance = REPAIR_GUIDANCE.get(
+            (issue["domain"], str(issue.get("translation_key") or "")),
+        )
+        if guidance:
+            context["repair_guidance"] = guidance
         if statistics:
             context["statistics_sample"] = sample_lines(
                 str((issue.get("translation_placeholders") or {}).get("statistics", "")),
@@ -649,6 +658,12 @@ class RepairCatalogue(hass.Hass):
                             time.monotonic() - started,
                         )
                     except Exception as error:
+                        if isinstance(error, AnalysisValidationError):
+                            self.log(
+                                "Repair validation rejected: ref=%s rule=%s",
+                                repair_ref,
+                                str(error),
+                            )
                         self.store.failed(
                             pending["key"],
                             pending["fingerprint"],
