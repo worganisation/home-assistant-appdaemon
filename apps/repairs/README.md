@@ -14,8 +14,9 @@ deployment workflow. Increment `ai_config_revision` whenever its provider/model
 settings change so cached analyses are refreshed. No extra API credentials are used.
 
 Deploy the companion Home Assistant Recorder exclusions before enabling the app.
-Install its `resources/ai-repairs/dashboard.yaml` as a storage-mode dashboard
-after confirming the MQTT entities. This repository does not install a live dashboard.
+The storage-mode Repairs dashboard at `/dashboard-repairs` consumes the MQTT
+entities. Its live configuration is maintained through Home Assistant's dashboard
+editor or MCP API; neither repository maintains a separate dashboard template.
 
 The runtime uses the existing authenticated HASS plugin's
 `websocket_send_json(timeout=30, silent=True, ...)` adapter, verified against
