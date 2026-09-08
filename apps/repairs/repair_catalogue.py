@@ -39,12 +39,9 @@ class RepairCatalogue(hass.Hass):
     """Reconcile repairs and expose a durable AI catalogue through MQTT."""
 
     async def initialize(self) -> None:
-        """Remain inert until explicitly enabled after configuration."""
+        """Open the catalogue and start MQTT and repair reconciliation."""
         self.task: asyncio.Task[None] | None = None
         self.client: mqtt.Client | None = None
-        if not self.args.get("enabled", False):
-            self.log("Repair catalogue disabled; configure Repairs AI before enabling")
-            return
         self.ai_entity = str(self.args["ai_task_entity"])
         if not self.ai_entity.startswith("ai_task."):
             raise ValueError("ai_task_entity must name a dedicated AI task")

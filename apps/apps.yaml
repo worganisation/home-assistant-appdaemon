@@ -62,7 +62,6 @@ qbittorrent_storage_cleanup:
 repair_catalogue:
   module: repairs.repair_catalogue
   class: RepairCatalogue
-  enabled: false
   ai_task_entity: ai_task.repairs_ai
   ai_config_revision: '1'
   database: /data/repairs/catalogue.sqlite3

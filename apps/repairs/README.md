@@ -1,15 +1,15 @@
 # Repair catalogue
 
-An opt-in AppDaemon app that describes Home Assistant repairs with a dedicated
+An AppDaemon app that describes Home Assistant repairs with a dedicated
 AI Task. It never resolves repairs, dismisses issues, invokes suggested actions,
 posts GitHub issues or sends notifications. Other repair automations operate independently.
 
 ## Configuration
 
-The `repair_catalogue` entry in `apps/apps.yaml` defaults to `enabled: false`.
+The `repair_catalogue` entry in `apps/apps.yaml` starts the worker when loaded.
 `ai_task_entity` identifies a dedicated **Repairs AI** task that uses the same
 provider and model as `ai_task.habit_reminder_ai`, with independent settings.
-`enabled` controls worker operation. `ai_config_revision` identifies the configured
+`ai_config_revision` identifies the configured
 provider/model settings for cache invalidation; increasing it invalidates cached
 analyses. The app uses Home Assistant's AI task credentials.
 
@@ -28,7 +28,7 @@ AI requests use the established `ai_task/generate_data` service response pattern
 
 ## Lifecycle and storage
 
-SQLite lives at `/data/repairs/catalogue.sqlite3` in persistent add-on storage,
+SQLite lives at `/data/repairs/catalogue.sqlite3` in the AppDaemon App's persistent storage,
 with owner-only database permissions. Backup coverage depends on inclusion of
 AppDaemon's persistent data. The database is runtime data outside Git. Its two tables are:
 `repairs` keeps lifecycle, current context, notes and latest analysis; `analyses`
@@ -83,5 +83,5 @@ prek run --all-files
 ```
 
 Validation uses the repository's type, formatting, lint and workflow checks.
-Disabling the app preserves SQLite history and makes its MQTT entities unavailable.
+Stopping the app preserves SQLite history and makes its MQTT entities unavailable.
 The live dashboard has an independent lifecycle.
