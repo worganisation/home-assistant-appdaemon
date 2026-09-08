@@ -72,6 +72,8 @@ narration or generic disclaimers. Source-controlled procedures in `resolutions.p
 supply the numbered actions and physical requirements, not the model. Known repair
 types use concise semantic actions without version-dependent menu paths; unknown
 types defer to native Repairs. Saved notes take precedence over generic procedures.
+Active dashboard records use the current procedure even while a summary refresh is
+pending or failed. Historical analysis revisions retain their saved procedures.
 Each field has a strict character limit. Prompt version changes invalidate cached
 analyses and accompany changes to procedure semantics.
 Navigation and its action share a step. Optional fields use `None` when there is

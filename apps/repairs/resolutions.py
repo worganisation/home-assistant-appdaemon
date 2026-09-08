@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from .catalogue import KITCHEN_KEY, KITCHEN_NOTE
+KITCHEN_KEY = "spook:lovelace_unknown_entity_references_dashboard-mobile"
+KITCHEN_NOTE = (
+    "Re-pair the original kitchen radiator; never substitute the small radiator. "
+    "2026-09-08 investigation: Z2M device leave on 2026-08-21, no rejoin found. "
+    "Historical evidence: verify current condition."
+)
 
 NATIVE_REPAIR = (
     "Open this issue in Home Assistant Repairs and follow its repair instructions"

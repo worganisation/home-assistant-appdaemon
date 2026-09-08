@@ -11,6 +11,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from .resolutions import KITCHEN_KEY, KITCHEN_NOTE, resolution
+
 if TYPE_CHECKING:
     from collections.abc import Generator
 
@@ -40,12 +42,6 @@ LIMITS = {
     "uncertainties": 160,
     "involvement": 140,
 }
-KITCHEN_KEY = "spook:lovelace_unknown_entity_references_dashboard-mobile"
-KITCHEN_NOTE = (
-    "Re-pair the original kitchen radiator; never substitute the small radiator. "
-    "2026-09-08 investigation: Z2M device leave on 2026-08-21, no rejoin found. "
-    "Historical evidence: verify current condition."
-)
 
 
 def now() -> str:
@@ -404,7 +400,21 @@ class Catalogue:
             {
                 "key": row["key"],
                 "repair": json.loads(row["metadata"]),
-                "analysis": json.loads(row["analysis"]) if row["analysis"] else None,
+                "analysis": (
+                    json.loads(row["analysis"])
+                    | (
+                        resolution(
+                            {
+                                "repair": json.loads(row["metadata"]),
+                                "user_note": row["note"],
+                            },
+                        )
+                        if status == "active"
+                        else {}
+                    )
+                    if row["analysis"]
+                    else None
+                ),
                 "note": row["note"],
                 "status": row["generation_status"],
                 "stale": bool(
