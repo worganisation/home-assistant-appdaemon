@@ -67,12 +67,12 @@ Opening the dashboard never triggers generation. Provider failures leave repair
 metadata available and retain previous explanations with their generation status.
 
 Repair-specific guidance distinguishes obsolete statistics and configuration references
-from device failures. Explanations target one or two sentences and three to five
-numbered resolution steps; each field has a strict character limit. Suggestions
-remain advisory and require review. Prompt version changes invalidate cached analyses.
-Validation rejects prose without terminal sentence punctuation and responses without
-three to five complete numbered step lines. These checks catch visible cut-offs, not
-all factual or grammatical errors; rejected output follows the bounded retry policy
+from device failures. Output uses compact facts and fragments, without introductory
+narration or generic disclaimers. Steps contain one to five numbered actions, without
+a minimum sentence length or required final punctuation. Each field has a strict
+character limit. Prompt version changes invalidate cached analyses.
+Validation rejects empty/oversized fields, dangling conjunctions and malformed numbered
+steps. These checks do not establish factual accuracy; rejected output follows the bounded retry policy
 and cannot replace a saved analysis.
 
 INFO logs record refresh duration, active/pending/failed counts, cache hits, generation

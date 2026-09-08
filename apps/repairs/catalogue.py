@@ -17,10 +17,10 @@ if TYPE_CHECKING:
 MAX_NOTE_LENGTH = 255
 MAX_ATTEMPTS = 3
 SAMPLE_SIZE = 8
-MIN_STEPS = 3
+MIN_STEPS = 1
 MAX_STEPS = 5
 
-PROMPT_VERSION = "3"
+PROMPT_VERSION = "4"
 FIELDS = (
     "title",
     "explanation",
@@ -33,12 +33,12 @@ FIELDS = (
 ENTITY_PATTERN = re.compile(r"\b([a-z_]+\.[a-z0-9_]+)\b")
 LIMITS = {
     "title": 120,
-    "explanation": 500,
-    "impact": 280,
-    "evidence": 500,
-    "steps": 1000,
-    "uncertainties": 320,
-    "involvement": 240,
+    "explanation": 240,
+    "impact": 160,
+    "evidence": 320,
+    "steps": 700,
+    "uncertainties": 160,
+    "involvement": 140,
 }
 KITCHEN_KEY = "spook:lovelace_unknown_entity_references_dashboard-mobile"
 KITCHEN_NOTE = (
@@ -178,20 +178,20 @@ def validate_analysis(value: object) -> dict[str, str]:
         text = value.get(field)
         if not isinstance(text, str) or not text.strip() or len(text) > LIMITS[field]:
             raise AnalysisValidationError(f"Invalid AI field: {field}")
-        if (
-            field != "title"
-            and text.strip() != "None identified"
-            and not re.search(r"[.!?][\"'\u2019\u201d)]?$", text.strip())
+        if field != "title" and re.search(
+            r"(?:\b(?:and|because|which|that|with|such as)|[,;:])$",
+            text.strip(),
+            re.IGNORECASE,
         ):
             raise AnalysisValidationError(f"Incomplete AI field: {field}")
         if field == "steps":
             steps = text.strip().splitlines()
             if not MIN_STEPS <= len(steps) <= MAX_STEPS or any(
-                not re.fullmatch(rf"{index}\. .+[.!?]", step.strip())
+                not re.fullmatch(rf"{index}\. \S.*", step.strip())
                 for index, step in enumerate(steps, 1)
             ):
                 raise AnalysisValidationError(
-                    "Steps must contain three to five complete numbered sentences",
+                    "Steps must contain one to five nonempty numbered lines",
                 )
         result[field] = clean_text(text.strip(), LIMITS[field])
     return result
