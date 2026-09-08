@@ -76,6 +76,9 @@ nothing useful to display. The `involvement` field describes only physical actio
 at a device; logins and UI actions belong in `steps`. The dashboard omits empty
 optional sections and labels hands-on requirements **Physical actions**.
 AI identity, prompt version and occurrence remain cache inputs, not model evidence.
+Evidence is rendered directly from repair placeholders, without AI rewriting.
+Long reference lists retain complete entries and disclose omitted details; statistics
+include their total count. The model generates the other analysis fields.
 Validation rejects empty/oversized fields, dangling conjunctions and malformed numbered
 steps. These checks do not establish factual accuracy; rejected output follows the bounded retry policy
 and cannot replace a saved analysis.

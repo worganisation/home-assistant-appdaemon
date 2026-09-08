@@ -20,7 +20,7 @@ SAMPLE_SIZE = 8
 MIN_STEPS = 1
 MAX_STEPS = 3
 
-PROMPT_VERSION = "6"
+PROMPT_VERSION = "7"
 FIELDS = (
     "title",
     "explanation",
@@ -149,6 +149,36 @@ def entity_references(issue: dict[str, Any]) -> tuple[set[str], set[str]]:
     return affected, suggested - affected
 
 
+def observed_evidence(value: dict[str, Any]) -> str:
+    """Render exact repair references without model rewriting or cut identifiers."""
+    placeholders = value["repair"]["translation_placeholders"]
+    lines = []
+    for key in (
+        "name",
+        "version",
+        "entity_id",
+        "entity",
+        "entities",
+        "resources",
+        "statistics",
+    ):
+        raw = placeholders.get(key)
+        if raw:
+            lines.extend(str(raw).splitlines())
+    lines = list(dict.fromkeys(line.strip() for line in lines if line.strip()))
+    footer = ["Additional references in native Repairs"]
+    statistics = value["context"].get("statistics_sample")
+    if statistics:
+        footer.append(f"{statistics['total']} statistics total; sample shown")
+    budget = LIMITS["evidence"] - len("\n".join(footer)) - 1
+    selected: list[str] = []
+    for line in lines:
+        if "[truncated]" not in line and len("\n".join([*selected, line])) <= budget:
+            selected.append(line)
+    selected.extend(footer if len(selected) < len(lines) else footer[1:])
+    return "\n".join(selected) or "None"
+
+
 def model_input(value: dict[str, Any]) -> dict[str, Any]:
     """Exclude cache bookkeeping and replace large placeholder lists with samples."""
     result = json.loads(encode(value))
@@ -181,7 +211,7 @@ def validate_analysis(value: object) -> dict[str, str]:
         text = value.get(field)
         if not isinstance(text, str) or not text.strip() or len(text) > LIMITS[field]:
             raise AnalysisValidationError(f"Invalid AI field: {field}")
-        if field != "title" and re.search(
+        if field not in ("title", "evidence") and re.search(
             r"(?:\b(?:and|because|which|that|with|such as)|[,;:])$",
             text.strip(),
             re.IGNORECASE,

@@ -27,6 +27,7 @@ from .catalogue import (
     fingerprint,
     model_input,
     now,
+    observed_evidence,
     sample_lines,
     validate_analysis,
 )
@@ -58,8 +59,7 @@ the user's responsibility. Avoid 'the user must manually', 'please', and 'it is 
 Explanation: one compact phrase stating the fault and affected items; no introduction.
 Example: 'Missing resource files: floorplan, networkmap and threshold-alerts'.
 Impact: one brief consequence; use 'Unknown' if not established.
-Evidence: concrete names, counts or observations only; no hashes, internal issue IDs,
-model/provider metadata, JSON field labels or repeated summary. Label sampled lists as samples.
+Evidence is rendered separately from source data; do not generate an evidence field.
 Steps: one to three short numbered actions, one per line. Use only as many as needed.
 Prefer one to three actions. Combine navigation and the action at its destination in one line.
 Do not split opening Home Assistant, navigating and selecting an item into separate steps.
@@ -83,7 +83,6 @@ FIELD_DESCRIPTIONS = {
     "title": "Short factual fault label; no inferred cause",
     "explanation": "One compact fact, no introductory narration",
     "impact": "Established consequence, or None",
-    "evidence": "Observed names/counts only; no internal IDs; mark samples",
     "steps": "1-3 numbered lines; combine navigation and action; no filler/save step",
     "uncertainties": "None unless a specific missing fact changes the next action",
     "involvement": "Physical actions at the device only; None for UI/logins/remote work",
@@ -619,6 +618,7 @@ class RepairCatalogue(hass.Hass):
                         "selector": {"text": {"multiline": True}},
                     }
                     for field in FIELDS
+                    if field != "evidence"
                 },
             },
             return_response=True,
@@ -629,7 +629,9 @@ class RepairCatalogue(hass.Hass):
         # response dictionaries are also accepted by existing runtime versions.
         value = response
         for _ in range(4):
-            if not isinstance(value, dict) or all(field in value for field in FIELDS):
+            if not isinstance(value, dict) or all(
+                field in value for field in FIELDS if field != "evidence"
+            ):
                 break
             value = next(
                 (
@@ -639,6 +641,8 @@ class RepairCatalogue(hass.Hass):
                 ),
                 None,
             )
+        if isinstance(value, dict):
+            value["evidence"] = observed_evidence(json.loads(row["input"]))
         analysis = validate_analysis(value)
         self._drain_commands()
         try:
