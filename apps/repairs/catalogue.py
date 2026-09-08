@@ -16,8 +16,11 @@ if TYPE_CHECKING:
 
 MAX_NOTE_LENGTH = 255
 MAX_ATTEMPTS = 3
+SAMPLE_SIZE = 8
+MIN_STEPS = 3
+MAX_STEPS = 5
 
-PROMPT_VERSION = "2"
+PROMPT_VERSION = "3"
 FIELDS = (
     "title",
     "explanation",
@@ -100,6 +103,68 @@ def fingerprint(value: object) -> str:
     return hashlib.sha256(encode(value).encode()).hexdigest()
 
 
+def sample_lines(text: str, limit: int = SAMPLE_SIZE) -> dict[str, Any]:
+    """Keep a deterministic spread of list entries, with explicit coverage."""
+    lines = [line.strip() for line in text.splitlines() if line.strip()]
+    indexes = (
+        [round(i * (len(lines) - 1) / (limit - 1)) for i in range(limit)]
+        if len(lines) > limit
+        else list(range(len(lines)))
+    )
+    return {
+        "sample": [clean_text(lines[i], 300) for i in indexes],
+        "total": len(lines),
+        "omitted": max(0, len(lines) - limit),
+        "full_list": "Available in native Home Assistant Repairs.",
+    }
+
+
+def entity_references(issue: dict[str, Any]) -> tuple[set[str], set[str]]:
+    """Separate affected entity fields from typo suggestions and resource paths."""
+    affected: set[str] = set()
+    suggested: set[str] = set()
+    for key, raw in (issue.get("translation_placeholders") or {}).items():
+        if key not in {
+            "entity",
+            "entity_id",
+            "entities",
+            "statistics",
+            "device_trackers",
+        }:
+            continue
+        text = str(raw)
+        suggestions = re.findall(r"\(did you mean[^)]*\)", text, flags=re.IGNORECASE)
+        for suggestion in suggestions:
+            suggested.update(ENTITY_PATTERN.findall(suggestion))
+        text = re.sub(r"\(did you mean[^)]*\)", "", text, flags=re.IGNORECASE)
+        # File paths and URLs are not entities even when embedded in an entity field.
+        text = re.sub(r"(?:https?://|/)[^\s`]+", "", text)
+        affected.update(ENTITY_PATTERN.findall(text))
+    affected.update(ENTITY_PATTERN.findall(str(issue.get("issue_id", ""))))
+    affected = {
+        value
+        for value in affected
+        if not value.endswith((".js", ".css", ".yaml", ".json"))
+    }
+    return affected, suggested - affected
+
+
+def model_input(value: dict[str, Any]) -> dict[str, Any]:
+    """Exclude cache bookkeeping and replace large placeholder lists with samples."""
+    result = json.loads(encode(value))
+    repair = result["repair"]
+    repair.pop("source_fingerprint", None)
+    for key, raw in repair["translation_placeholders"].items():
+        text = re.sub(r"\(did you mean[^)]*\)", "", str(raw), flags=re.IGNORECASE)
+        repair["translation_placeholders"][key] = text
+        if len(str(text).splitlines()) > SAMPLE_SIZE:
+            repair["translation_placeholders"][key] = sample_lines(str(text))
+    statistics = result["context"].get("statistics_sample")
+    if statistics:
+        repair["translation_placeholders"]["statistics"] = statistics
+    return result
+
+
 def validate_analysis(value: object) -> dict[str, str]:
     """Accept complete, bounded structured output only."""
     if not isinstance(value, dict):
@@ -109,6 +174,21 @@ def validate_analysis(value: object) -> dict[str, str]:
         text = value.get(field)
         if not isinstance(text, str) or not text.strip() or len(text) > LIMITS[field]:
             raise ValueError(f"Invalid AI field: {field}")
+        if (
+            field != "title"
+            and text.strip() != "None identified"
+            and not re.search(r"[.!?][\"'\u2019\u201d)]?$", text.strip())
+        ):
+            raise ValueError(f"Incomplete AI field: {field}")
+        if field == "steps":
+            steps = text.strip().splitlines()
+            if not MIN_STEPS <= len(steps) <= MAX_STEPS or any(
+                not re.fullmatch(rf"{index}\. .+[.!?]", step.strip())
+                for index, step in enumerate(steps, 1)
+            ):
+                raise ValueError(
+                    "Steps must contain three to five complete numbered sentences",
+                )
         result[field] = clean_text(text.strip(), LIMITS[field])
     return result
 

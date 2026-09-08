@@ -24,6 +24,9 @@ The runtime uses the existing authenticated HASS plugin's
 **4.5.13**. Compatibility depends on this internal API's request and response
 contract. The only allowed commands are repairs listing, entity registry listing,
 HA configuration metadata, person configuration and Lovelace configuration reads.
+It also reads installed English issue translations through `frontend/get_translations`.
+Only each repair's title and description enter its context; unavailable translations
+are disclosed and the user is directed to native Repairs rather than an invented flow.
 AI requests use the established `ai_task/generate_data` service response pattern.
 
 ## Lifecycle and storage
@@ -49,6 +52,13 @@ placeholder is bounded to 8,000 characters, with truncation disclosed. Configura
 context includes only matching structural entity references or person tracker IDs;
 no action bodies, secrets, entire dashboards or bulk logs reach the model.
 
+Entity context comes from entity/statistic placeholder fields, not arbitrary resource
+paths. Typo suggestions remain separate from affected references. Model input excludes
+cache hashes and samples large lists across their length with explicit totals and
+omission counts. Statistics context is limited to eight entity checks and eight list
+entries; the full list remains available in native Repairs. SQLite retains bounded
+repair metadata independently of the compact model input.
+
 AI runs serially with a 180-second timeout. Malformed output cannot replace a
 saved analysis. Retry delays are one minute then five minutes; after the third
 failure a user must request a retry. Before accepting output the worker re-fetches
@@ -60,6 +70,10 @@ Repair-specific guidance distinguishes obsolete statistics and configuration ref
 from device failures. Explanations target one or two sentences and three to five
 numbered resolution steps; each field has a strict character limit. Suggestions
 remain advisory and require review. Prompt version changes invalidate cached analyses.
+Validation rejects prose without terminal sentence punctuation and responses without
+three to five complete numbered step lines. These checks catch visible cut-offs, not
+all factual or grammatical errors; rejected output follows the bounded retry policy
+and cannot replace a saved analysis.
 
 INFO logs record refresh duration, active/pending/failed counts, cache hits, generation
 duration, attempt number, retry delay and stale-output rejection. A cache hit is an
