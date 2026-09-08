@@ -68,10 +68,12 @@ metadata available and retain previous explanations with their generation status
 
 Repair-specific guidance distinguishes obsolete statistics and configuration references
 from device failures. Output uses compact facts and fragments, without introductory
-narration or generic disclaimers. The prompt targets one to three numbered actions;
-validation accepts up to five to avoid rejecting useful longer procedures, without
-a minimum sentence length or required final punctuation. Each field has a strict
-character limit. Prompt version changes invalidate cached analyses.
+narration or generic disclaimers. Source-controlled procedures in `resolutions.py`
+supply the numbered actions and physical requirements, not the model. Known repair
+types use concise semantic actions without version-dependent menu paths; unknown
+types defer to native Repairs. Saved notes take precedence over generic procedures.
+Each field has a strict character limit. Prompt version changes invalidate cached
+analyses and accompany changes to procedure semantics.
 Navigation and its action share a step. Optional fields use `None` when there is
 nothing useful to display. The `involvement` field describes only physical actions
 at a device; logins and UI actions belong in `steps`. The dashboard omits empty
@@ -79,7 +81,8 @@ optional sections and labels hands-on requirements **Physical actions**.
 AI identity, prompt version and occurrence remain cache inputs, not model evidence.
 Evidence is rendered directly from repair placeholders, without AI rewriting.
 Long reference lists retain complete entries and disclose omitted details; statistics
-include their total count. The model generates the other analysis fields.
+include their total count. The model generates only the title, explanation, impact
+and uncertainties; its procedure fields are ignored even if returned unexpectedly.
 Validation rejects empty/oversized fields, dangling conjunctions and malformed numbered
 steps. These checks do not establish factual accuracy; rejected output follows the bounded retry policy
 and cannot replace a saved analysis.

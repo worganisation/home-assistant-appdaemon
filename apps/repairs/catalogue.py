@@ -20,7 +20,7 @@ SAMPLE_SIZE = 8
 MIN_STEPS = 1
 MAX_STEPS = 5
 
-PROMPT_VERSION = "8"
+PROMPT_VERSION = "9"
 FIELDS = (
     "title",
     "explanation",
