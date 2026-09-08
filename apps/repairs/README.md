@@ -2,34 +2,35 @@
 
 An opt-in AppDaemon app that describes Home Assistant repairs with a dedicated
 AI Task. It never resolves repairs, dismisses issues, invokes suggested actions,
-posts GitHub issues or sends notifications. Existing repair automations are unchanged.
+posts GitHub issues or sends notifications. Other repair automations operate independently.
 
-## Configuration and rollout
+## Configuration
 
-The `repair_catalogue` entry in `apps/apps.yaml` ships **disabled**. Create a
-separate **Repairs AI** task under the same provider as `ai_task.habit_reminder_ai`,
-copying that task's model settings without modifying the habit task. Set
-`ai_task_entity` to its actual ID, then enable the app through the normal git
-deployment workflow. Increment `ai_config_revision` whenever its provider/model
-settings change so cached analyses are refreshed. No extra API credentials are used.
+The `repair_catalogue` entry in `apps/apps.yaml` defaults to `enabled: false`.
+`ai_task_entity` identifies a dedicated **Repairs AI** task that uses the same
+provider and model as `ai_task.habit_reminder_ai`, with independent settings.
+`enabled` controls worker operation. `ai_config_revision` identifies the configured
+provider/model settings for cache invalidation; increasing it invalidates cached
+analyses. The app uses Home Assistant's AI task credentials.
 
-Deploy the companion Home Assistant Recorder exclusions before enabling the app.
+The companion Home Assistant Recorder configuration excludes the catalogue sensors
+and note draft, preventing generated text from accumulating in the history database.
 The storage-mode Repairs dashboard at `/dashboard-repairs` consumes the MQTT
 entities. Its live configuration is maintained through Home Assistant's dashboard
 editor or MCP API; neither repository maintains a separate dashboard template.
 
 The runtime uses the existing authenticated HASS plugin's
-`websocket_send_json(timeout=30, silent=True, ...)` adapter, verified against
-AppDaemon **4.5.13**. This is an internal AppDaemon API: recheck it before upgrading
-AppDaemon. The only allowed commands are repairs listing, entity registry listing,
+`websocket_send_json(timeout=30, silent=True, ...)` adapter from AppDaemon
+**4.5.13**. Compatibility depends on this internal API's request and response
+contract. The only allowed commands are repairs listing, entity registry listing,
 HA configuration metadata, person configuration and Lovelace configuration reads.
 AI requests use the established `ai_task/generate_data` service response pattern.
 
 ## Lifecycle and storage
 
 SQLite lives at `/data/repairs/catalogue.sqlite3` in persistent add-on storage,
-with owner-only database permissions. Include AppDaemon in backups and verify
-restore coverage. Never place this database in Git. The schema has two tables:
+with owner-only database permissions. Backup coverage depends on inclusion of
+AppDaemon's persistent data. The database is runtime data outside Git. Its two tables are:
 `repairs` keeps lifecycle, current context, notes and latest analysis; `analyses`
 keeps successful revisions with their input fingerprint and occurrence number.
 
@@ -77,10 +78,10 @@ historical evidence. User edits are never overwritten by later reconciliation.
 ## Offline validation
 
 ```sh
-uv run --frozen python -m unittest discover -s tests -p 'test_repair*.py'
 uv run --frozen basedpyright
 prek run --all-files
 ```
 
-Tests must not connect to production or invoke paid AI requests. Rollback disables
-the app, leaving SQLite history in place; remove the dashboard separately.
+Validation uses the repository's type, formatting, lint and workflow checks.
+Disabling the app preserves SQLite history and makes its MQTT entities unavailable.
+The live dashboard has an independent lifecycle.
