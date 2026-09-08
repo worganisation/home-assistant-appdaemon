@@ -20,7 +20,7 @@ SAMPLE_SIZE = 8
 MIN_STEPS = 1
 MAX_STEPS = 5
 
-PROMPT_VERSION = "4"
+PROMPT_VERSION = "5"
 FIELDS = (
     "title",
     "explanation",
@@ -152,6 +152,8 @@ def entity_references(issue: dict[str, Any]) -> tuple[set[str], set[str]]:
 def model_input(value: dict[str, Any]) -> dict[str, Any]:
     """Exclude cache bookkeeping and replace large placeholder lists with samples."""
     result = json.loads(encode(value))
+    for key in ("ai_identity", "prompt_version", "occurrence"):
+        result.pop(key, None)
     repair = result["repair"]
     repair.pop("source_fingerprint", None)
     for key, raw in repair["translation_placeholders"].items():

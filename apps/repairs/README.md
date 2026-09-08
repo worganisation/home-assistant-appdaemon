@@ -71,6 +71,11 @@ from device failures. Output uses compact facts and fragments, without introduct
 narration or generic disclaimers. Steps contain one to five numbered actions, without
 a minimum sentence length or required final punctuation. Each field has a strict
 character limit. Prompt version changes invalidate cached analyses.
+Navigation and its action share a step. Optional fields use `None` when there is
+nothing useful to display. The `involvement` field describes only physical actions
+at a device; logins and UI actions belong in `steps`. The dashboard omits empty
+optional sections and labels hands-on requirements **Physical actions**.
+AI identity, prompt version and occurrence remain cache inputs, not model evidence.
 Validation rejects empty/oversized fields, dangling conjunctions and malformed numbered
 steps. These checks do not establish factual accuracy; rejected output follows the bounded retry policy
 and cannot replace a saved analysis.
