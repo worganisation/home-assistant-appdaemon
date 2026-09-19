@@ -54,6 +54,7 @@ class ProBreezeAC(hass.Hass):
         self.device = None
         self.mqtt_client = None
         self._poll_timer = None
+        self._stopping = False
         self._last_raw_status_json: str | None = None
         self._consecutive_failures = 0
         self._mqtt_reported_available = False
@@ -92,38 +93,49 @@ class ProBreezeAC(hass.Hass):
 
     def terminate(self) -> None:
         """Cleanly disconnect the MQTT client on AppDaemon shutdown."""
-        if self._poll_timer is not None:
-            self.cancel_timer(self._poll_timer)
-            self._poll_timer = None
-
-        if self.mqtt_client is None:
-            return
-
-        self._publish_mqtt_availability(is_available=False)
-        self.mqtt_client.loop_stop()
-        self.mqtt_client.disconnect()
+        self._stopping = True
+        try:
+            if self._poll_timer is not None:
+                self.cancel_timer(self._poll_timer)
+                self._poll_timer = None
+        finally:
+            try:
+                if self.mqtt_client is not None:
+                    try:
+                        self._publish_mqtt_availability(is_available=False)
+                    finally:
+                        try:
+                            self.mqtt_client.disconnect()
+                        finally:
+                            self.mqtt_client.loop_stop()
+            finally:
+                self._reset_device()
 
     def poll_device(self, kwargs: dict[str, Any] | None = None) -> None:
         """Poll the AC and sync mapped DPS values into Home Assistant."""
         del kwargs
         self._poll_timer = None
+        if self._stopping:
+            return
 
         try:
             status = self._read_status()
-            if status is None:
+            if status is None or self._stopping:
                 return
 
             dps = self._extract_dps(status)
             self._write_raw_sensor("updated", status, dps=dps)
-            self._set_availability(is_available=True)
             self._log_status_if_changed(status, dps)
-
             self._publish_mqtt_climate_state(dps)
+            self._set_availability(is_available=True)
         finally:
             self._schedule_poll()
 
     def _schedule_poll(self, delay: float | None = None) -> None:
         """Schedule one poll, replacing any pending poll timer."""
+        if self._stopping:
+            return
+
         if self._poll_timer is not None:
             self.cancel_timer(self._poll_timer)
 
@@ -134,6 +146,9 @@ class ProBreezeAC(hass.Hass):
 
     def handle_mqtt_command(self, kwargs: dict[str, Any]) -> None:
         """Handle a command received from the MQTT climate entity."""
+        if self._stopping:
+            return
+
         topic = str(kwargs["topic"])
         payload = str(kwargs["payload"]).strip()
         command = self._mqtt_command_for_topic(topic)
@@ -205,6 +220,7 @@ class ProBreezeAC(hass.Hass):
 
         self.mqtt_client.on_connect = self._handle_mqtt_connect
         self.mqtt_client.on_message = self._handle_mqtt_message
+        self.mqtt_client.on_disconnect = self._handle_mqtt_disconnect
         self.mqtt_client.will_set(
             self._mqtt_topic("availability"),
             "offline",
@@ -251,11 +267,40 @@ class ProBreezeAC(hass.Hass):
             )
             return
 
+        if self._stopping:
+            return
+
         self.log("MQTT connected for %s", self.mqtt_object_id)
-        self._publish_mqtt_discovery()
-        self._set_availability(is_available=True, force=True)
         for topic in self._mqtt_command_topics.values():
             client.subscribe(topic, qos=self.mqtt_qos)
+        self.run_in(self._restore_mqtt_state, 0)
+
+    def _restore_mqtt_state(self, kwargs: dict[str, Any]) -> None:
+        """Republish availability on the app thread without changing AC health."""
+        del kwargs
+        if self._stopping:
+            return
+
+        self._publish_mqtt_discovery()
+        self._publish_mqtt_availability(is_available=self._mqtt_reported_available)
+
+    def _handle_mqtt_disconnect(
+        self,
+        client: Any,
+        userdata: Any,
+        disconnect_flags: Any,
+        reason_code: Any,
+        properties: Any,
+    ) -> None:
+        del client, userdata, disconnect_flags, properties
+        if not self._stopping:
+            self.log(
+                "MQTT disconnected for %s: %s; repeated disconnects can indicate "
+                "another client using the same mqtt_client_id",
+                self.mqtt_object_id,
+                reason_code,
+                level="WARNING",
+            )
 
     def _handle_mqtt_message(
         self,
@@ -264,6 +309,9 @@ class ProBreezeAC(hass.Hass):
         message: Any,
     ) -> None:
         del client, userdata
+
+        if self._stopping:
+            return
 
         payload = message.payload.decode("utf-8")
         # Keep all TinyTuya socket access on AppDaemon's app thread.
@@ -529,13 +577,17 @@ class ProBreezeAC(hass.Hass):
             self._reset_device()
             return None
 
-        if "dps" not in status:
-            self.error("TinyTuya status did not include DPS: %s", status)
+        if (
+            status.get("Error")
+            or not isinstance(status.get("dps"), dict)
+            or not status["dps"]
+        ):
+            self.error("TinyTuya status did not include valid DPS: %s", status)
             self._log_status_if_changed(status, {})
             self._write_raw_sensor(
                 "error",
                 status,
-                error=status.get("Error", "missing dps"),
+                error=status.get("Error", "missing or invalid dps"),
             )
             self._set_availability(is_available=False)
             self._reset_device()
@@ -549,7 +601,12 @@ class ProBreezeAC(hass.Hass):
         self._reset_device()
 
     def _reset_device(self) -> None:
-        self.device = None
+        device, self.device = self.device, None
+        if device is not None:
+            try:
+                device.close()
+            except Exception as err:
+                self.error("Failed to close TinyTuya socket: %s", err)
 
     def _extract_dps(self, status: dict[str, Any]) -> dict[str, Any]:
         dps = status.get("dps", {})
@@ -595,10 +652,10 @@ class ProBreezeAC(hass.Hass):
 
         self.set_state(self.raw_sensor, state=state, attributes=attributes)
 
-    def _set_availability(self, *, is_available: bool, force: bool = False) -> None:
+    def _set_availability(self, *, is_available: bool) -> None:
         if is_available:
             self._consecutive_failures = 0
-            if self._mqtt_reported_available and not force:
+            if self._mqtt_reported_available:
                 return
 
             self._mqtt_reported_available = True
