@@ -2067,6 +2067,7 @@ class HabitTracker(hass.Hass):
             self.store.save()
             self._publish_mood_next_reminder(user)
             return
+        self._mood_receptivity_deferred.discard(user)
         next_index = reminder_index + 1
         if next_index <= last_index and repeat_fits_before_logical_day_end(
             now,

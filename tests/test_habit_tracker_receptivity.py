@@ -119,6 +119,30 @@ class MoodReceptivityTest(unittest.TestCase):
         tracker._notify_mood.assert_called_once_with("will", MOOD_FALLBACK_MESSAGE)
         self.assertNotIn("will", tracker._mood_receptivity_deferred)
 
+    def test_successful_retry_clears_deferral_before_next_repeat(self) -> None:
+        """A helper recovery cannot accelerate a repeat after a successful retry."""
+        tracker = self._tracker(datetime(2026, 9, 2, 17, tzinfo=UTC))
+        tracker.store.data.users["will"].mood_repeat_count = 1
+        tracker._baseline_mood_receptive = Mock(side_effect=[False, True, True])
+        tracker._send_mood_reminder("will", 1)
+        tracker._aware_now.return_value = datetime(2026, 9, 2, 17, 15, tzinfo=UTC)
+        tracker._send_mood_reminder("will", 1)
+
+        tracker._context_receptivity_changed(
+            "binary_sensor.will_mood_prompt_receptive",
+            "state",
+            "unavailable",
+            "on",
+            user="will",
+        )
+
+        tracker._notify_mood.assert_called_once_with("will", MOOD_FALLBACK_MESSAGE)
+        self.assertNotIn("will", tracker._mood_receptivity_deferred)
+        pending = tracker.store.data.users["will"].pending_mood_reminder
+        self.assertIsNotNone(pending)
+        assert pending is not None
+        self.assertEqual(pending.next_index, 2)
+
     def test_blocked_baseline_expires_at_ten_pm(self) -> None:
         """No scheduled reminder survives the agreed 22:00 cutoff."""
         tracker = self._tracker(datetime(2026, 9, 2, 22, tzinfo=UTC))

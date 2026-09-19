@@ -58,6 +58,18 @@ qbittorrent_storage_cleanup:
 
 # Habit and Mood Tracker
 
+# Repair catalogue: enable only after creating the separate Repairs AI task.
+repair_catalogue:
+  module: repairs.repair_catalogue
+  class: RepairCatalogue
+  ai_task_entity: ai_task.repairs_ai
+  ai_config_revision: '1'
+  database: /data/repairs/catalogue.sqlite3
+  mqtt_host: !secret appdaemon_mqtt_host
+  mqtt_port: 1883
+  mqtt_username: !secret appdaemon_mqtt_username
+  mqtt_password: !secret appdaemon_mqtt_password
+
 habit_tracker:
   module: habit.habit_tracker
   class: HabitTracker
