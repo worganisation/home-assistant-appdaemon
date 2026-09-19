@@ -685,7 +685,9 @@ class CursorUsageMonitor(hass.Hass):
 
     @staticmethod
     def _normalize_models(value: Any) -> tuple[dict[str, Any], float]:
-        """Normalize Cursor's per-model aggregate list for HA attributes."""
+        """Normalize Cursor's per-model aggregates, including an empty period."""
+        if value is None:
+            return {}, 0.0
         if not isinstance(value, list):
             raise TypeError("Cursor model aggregations are not a list")
 
@@ -706,6 +708,16 @@ class CursorUsageMonitor(hass.Hass):
             }
         return models, total_cents
 
+    @staticmethod
+    def _unknown_state() -> dict[str, Any]:
+        """Return a complete MQTT payload for an account without good usage data."""
+        state: dict[str, Any] = {}
+        for sensor in SENSORS:
+            state[sensor.key] = "unknown"
+            if sensor.attributes_key is not None:
+                state[sensor.attributes_key] = {}
+        return state
+
     def _publish_error_state(
         self,
         account: CursorAccount,
@@ -716,6 +728,8 @@ class CursorUsageMonitor(hass.Hass):
     ) -> None:
         """Publish a diagnostic status while retaining last good usage values."""
         latest_state = self._latest_states.setdefault(account.account_id, {})
+        for key, value in self._unknown_state().items():
+            latest_state.setdefault(key, value)
         latest_state["usage_status"] = status
         latest_state["usage_status_attributes"] = {
             "last_updated": datetime.now(UTC).isoformat(),
