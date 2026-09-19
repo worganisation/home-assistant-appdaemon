@@ -154,14 +154,14 @@ wheels = [
 
 [[package]]
 name = "basedpyright"
-version = "1.39.8"
+version = "1.39.10"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "nodejs-wheel-binaries" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d2/62/8550c75850b2185df984d1de437b4805b039ba856cacbee2966236203133/basedpyright-1.39.8.tar.gz", hash = "sha256:bb1a86d4d71425d52d1501b317fe23d45527baed06bd5d5e1a07cd4b60d07b55", size = 25488230, upload-time = "2026-06-14T09:05:30.177Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/43/ad2999f3b09eb2b1e59931d88fac0f7bcc9c17fc18c903268779bd10cc97/basedpyright-1.39.10.tar.gz", hash = "sha256:c8eaf5302f3265e275c7df4fba194d7afa7c1cb53fbfd448e90098360aca2c2e", size = 24740347, upload-time = "2026-08-13T17:09:02.51Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f5/94/878454aefe94328ba7ad808ecd63da8311aae1198da46cfb29f5cfe130a8/basedpyright-1.39.8-py3-none-any.whl", hash = "sha256:a79d89928064bd9023d429b50c625d87d023bacc2fe3932ef6c7bd13b5426048", size = 13182726, upload-time = "2026-06-14T09:05:26.368Z" },
+    { url = "https://files.pythonhosted.org/packages/be/2a/a224054d75a58786c482f63b8ff2a09fc3362268bd1ebd0a61fb3f982153/basedpyright-1.39.10-py3-none-any.whl", hash = "sha256:cbd75d83c0be841329bcfef2d2f1182f152a6d975b8eb199e75cf5b8e9a3de78", size = 13482322, upload-time = "2026-08-13T17:08:59.074Z" },
 ]
 
 [[package]]
@@ -407,14 +407,14 @@ wheels = [
 
 [[package]]
 name = "gitpython"
-version = "3.1.58"
+version = "3.1.61"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "gitdb" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/26/d6/5f358ff283325580c2003a6d953aea18cfe10ae87b46f5ebc80fa3a386dc/gitpython-3.1.58.tar.gz", hash = "sha256:621416df10ef3fd0e19fabf9172ddeed0fa704d353d04f194eec56a625a95b22", size = 228498, upload-time = "2026-08-04T15:05:49.47Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6f/61/3285044215fb596bf093e39ccb96ece0a1076a8ca57a61e069a6a33cdb1b/gitpython-3.1.61.tar.gz", hash = "sha256:f51c24d8c0f733a195447385f5774a5dfe8767f5acfd7994a33755644c6ecc95", size = 231680, upload-time = "2026-08-28T11:01:13.761Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/ec/0c/9d8752098bc442f0726e64aa6135940b3a96809915d1aa4206c1bb97881d/gitpython-3.1.58-py3-none-any.whl", hash = "sha256:d331e722577f0fd7fc1f857419b3ecc07af66282b933d2a4d95f84a042fdd50f", size = 220183, upload-time = "2026-08-04T15:05:48.025Z" },
+    { url = "https://files.pythonhosted.org/packages/6f/5e/49cc172da4d0578644ba37cec5cb365b1fefc603b26edea9bcac1c7f830a/gitpython-3.1.61-py3-none-any.whl", hash = "sha256:8ab28c9da863cdd9e7d7694ec46cf3e6c9a12d8a30a1acd3447aec11975d530c", size = 222118, upload-time = "2026-08-28T11:01:12.262Z" },
 ]
 
 [[package]]
@@ -736,7 +736,7 @@ wheels = [
 
 [[package]]
 name = "pygithub"
-version = "2.9.1"
+version = "2.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "pyjwt", extra = ["crypto"] },
@@ -745,9 +745,9 @@ dependencies = [
     { name = "typing-extensions" },
     { name = "urllib3" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/ab/c3/8465a311197e16cf5ab68789fe689535e90f6b61ab524cc32a39e67237ae/pygithub-2.9.1.tar.gz", hash = "sha256:59771d7ff63d54d427be2e7d0dad2208dfffc2b0a045fec959263787739b611c", size = 2594989, upload-time = "2026-04-14T07:26:13.622Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/e1/9b/195603d5371861005a3467c5e4afd02fd0698795a2aa36dc41498b9d879d/pygithub-2.10.0.tar.gz", hash = "sha256:90ff24ef1cd1bd57124c2a3869cafee9d7b066909129ecdaba2c2d1903bc118d", size = 2750952, upload-time = "2026-08-20T10:05:08.327Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/77/aa/81a5506f089a26338bff17535e4339b3b22049ebd1bcdeff756c4d7a7559/pygithub-2.9.1-py3-none-any.whl", hash = "sha256:2ec78fca30092d51a42d76f4ddb02131b6f0c666a35dfdf364cf302cdda115b9", size = 449710, upload-time = "2026-04-14T07:26:12.382Z" },
+    { url = "https://files.pythonhosted.org/packages/91/71/f314841697a1d52af3e1ea7c5e1c3f09685b64ae4c58ff16b605a866255d/pygithub-2.10.0-py3-none-any.whl", hash = "sha256:192ada2a76e4afc7d6b37e500c9bfeba1731e6506697445a5ba1c4af8bf0b924", size = 455554, upload-time = "2026-08-20T10:05:06.991Z" },
 ]
 
 [[package]]
@@ -917,16 +917,16 @@ wheels = [
 
 [[package]]
 name = "tinytuya"
-version = "1.18.1"
+version = "1.20.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "colorama" },
     { name = "cryptography" },
     { name = "requests" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/03/a3/0aba0d3ea6ebbe2f53b45bb91e22887dc7e4faf0c558dde06a3647fc85da/tinytuya-1.18.1.tar.gz", hash = "sha256:5a1d84778038afa6d65ed5f12c547f97c955d8b1d403a9caacf35bc736f98aa3", size = 176800, upload-time = "2026-05-29T06:22:26.358Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/68/ba/4199064373d6aa310e32e69b2c397937b4c25f5f8862a514ecdaeb34fe36/tinytuya-1.20.0.tar.gz", hash = "sha256:54bfcd0b3411ae4c94cf473e1ca28a2ffa4d376ed2d8e7e4e4adfcdf4ca1657c", size = 190632, upload-time = "2026-07-06T04:39:14.342Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/31/0e/fd563c0282ebd6e787664b7b2c55e8171b1b862a52a4d66d512c51ac5f3b/tinytuya-1.18.1-py3-none-any.whl", hash = "sha256:72ad8c2079b45cfbde7c53821ce0bcf993df86ea13e72643e7f49948aa9c6899", size = 157008, upload-time = "2026-05-29T06:22:25.139Z" },
+    { url = "https://files.pythonhosted.org/packages/d7/87/3b1ac3cae266e82bf40cbc5cccb7a80e0c28b9a0b65a4ad9b088e190d507/tinytuya-1.20.0-py3-none-any.whl", hash = "sha256:ac5650c30f1153b1eae0b8d75f67043fb2397a168d3834e47da2d88d2c08c722", size = 170518, upload-time = "2026-07-06T04:39:12.997Z" },
 ]
 
 [[package]]
