@@ -87,7 +87,10 @@ restarts. `no_detected_issues` is not a compliance guarantee.
 
 Notifications use `script.notify_will`, link to `/mam-monitor/overview`, debounce
 transient client/connectability problems for 15 minutes, and deduplicate across
-restarts. Critical unresolved issues repeat at most daily; fresh source data is
+restarts. Site-notice alerts name each notification type, count and where to
+review it on MAM; they update when that summary changes and stay quiet while
+unchanged. Cleared notices are reported explicitly. No private-message or ticket
+contents are fetched. Critical unresolved issues repeat at most daily; fresh source data is
 required before resolving its alerts. A consolidated notification carries at most
 eight updates and links to remaining dashboard detail.
 

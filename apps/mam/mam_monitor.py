@@ -369,12 +369,15 @@ class MamMonitor(hass.Hass):
             due = (
                 not alert["last_sent"]
                 or severity != alert["severity"]
+                or (key == "site_notice" and message != alert.get("last_message"))
                 or (severity == "critical" and now - alert["last_sent"] >= DAY_SECONDS)
             )
             if eligible and due:
                 messages.append(message)
                 critical |= severity == "critical"
-                alert.update({"last_sent": now, "severity": severity})
+                alert.update(
+                    {"last_sent": now, "severity": severity, "last_message": message},
+                )
         for key in list(alerts):
             if key in issues:
                 continue
@@ -388,7 +391,15 @@ class MamMonitor(hass.Hass):
             if not dependencies_fresh:
                 continue
             if alerts[key]["last_sent"]:
-                messages.append(f"Resolved: {key.split(':')[-1].replace('_', ' ')}.")
+                messages.append(
+                    "MAM notification counters are now clear."
+                    if key == "site_notice"
+                    else "Cleared alert: "
+                    + alerts[key].get(
+                        "last_message",
+                        key.split(":")[-1].replace("_", " "),
+                    ),
+                )
             del alerts[key]
         if not messages:
             return

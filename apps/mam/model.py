@@ -92,12 +92,12 @@ def mapped_count(data: dict[str, Any], path: Any) -> int | None:
 
 
 NOTICE_LABELS = {
-    "pms": "Private-message notifications",
-    "aboutToDropClient": "Clients about to be dropped",
-    "tickets": "Ticket notifications",
-    "waiting_tickets": "Waiting-ticket notifications",
-    "requests": "Request notifications",
-    "topics": "Topic notifications",
+    "pms": "{count} private-message notification{s}. Check your MAM inbox.",
+    "aboutToDropClient": "{count} client{s} about to be dropped. Check MAM's client status.",
+    "tickets": "{count} ticket notification{s}. Check your MAM tickets.",
+    "waiting_tickets": "{count} waiting-ticket notification{s}. Check your MAM tickets.",
+    "requests": "{count} request notification{s}. Check your MAM requests.",
+    "topics": "{count} topic notification{s}. Check your MAM forum topics.",
 }
 
 
@@ -115,7 +115,9 @@ def account_notices(value: Any) -> tuple[list[str], bool, dict[str, int]]:
     available = all(count is not None for count in counts.values())
     counters = {key: count for key, count in counts.items() if count is not None}
     messages = [
-        f"{NOTICE_LABELS[key]}: {count}" for key, count in counters.items() if count
+        NOTICE_LABELS[key].format(count=count, s="" if count == 1 else "s")
+        for key, count in counters.items()
+        if count
     ]
     if value.get("iCloudRelay") is True:
         messages.append("MAM reports iCloud Private Relay in use.")
@@ -359,17 +361,21 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
         if account.get("notices"):
             issues["site_notice"] = (
                 "warning",
-                "MAM has account notices. Review the dashboard and MAM website.",
+                "MAM: "
+                + " ".join(
+                    safe_text(message, 240) for message in account["notices"][:10]
+                ),
             )
         if (account.get("hnr") or 0) > 0:
             issues["tracker_hnr"] = (
                 "critical",
-                "MAM reports hit-and-run torrents. Review them on MAM.",
+                f"MAM reports {account['hnr']} hit-and-run torrent(s). Review them on MAM.",
             )
         if (account.get("inactive_unsatisfied") or 0) > 0:
             issues["tracker_inactive_unsatisfied"] = (
                 "warning",
-                "MAM reports inactive unsatisfied torrents. Resume seeding them.",
+                f"MAM reports {account['inactive_unsatisfied']} inactive unsatisfied torrent(s). "
+                "Resume seeding them.",
             )
         count = account.get("unsatisfied")
         if count is not None and limit is not None:
