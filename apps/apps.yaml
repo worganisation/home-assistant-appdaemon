@@ -334,6 +334,7 @@ mam_monitor:
   module: mam.mam_monitor
   class: MamMonitor
   state_directory: /data/mam
+  mam_id: !secret mam_monitor_mam_id
   reserve_entity: input_number.mam_download_reserve_gib
   limit_override_entity: input_number.mam_unsatisfied_limit_override
   notify_script: script.notify_will

@@ -364,15 +364,17 @@ class MamRuntimeTests(unittest.TestCase):
         assert retry_delay("bad", 0) == 0
 
     def test_private_storage_and_missing_session(self) -> None:
-        """Provisioning cannot accidentally make credentials group readable."""
+        """Missing configured secrets fail safely and runtime storage stays private."""
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory)
             client = MamClient(path)
             with self.assertRaises(PollError):  # noqa: PT027 - stdlib unittest, no pytest dependency
                 client.credential()
-            save_private(path / "session.json", {"mam_id": "test-session"})
-            assert (path / "session.json").stat().st_mode & 0o077 == 0
+            save_private(path / "monitor.json", {"next_poll": 123})
+            assert (path / "monitor.json").stat().st_mode & 0o077 == 0
+            client = MamClient(path, "test-session")
             assert client.credential()[0] == "test-session"
+            assert not (path / "session.json").exists()
 
     def test_cookie_rotation(self) -> None:
         """A response cookie is saved for the next scheduled request."""

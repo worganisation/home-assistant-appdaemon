@@ -82,25 +82,22 @@ def check_response(response: Response) -> None:
 class MamClient:
     """Use only the documented user-data endpoint with an isolated cookie jar."""
 
-    def __init__(self, directory: Path) -> None:
+    def __init__(self, directory: Path, mam_id: Any = None) -> None:
         self.directory = directory
-        self.credential_path = directory / "session.json"
+        self.mam_id = mam_id
         self.cookie_path = directory / "cookies.txt"
 
     def credential(self) -> tuple[str, str]:
-        """Read a privately provisioned API session without logging it."""
-        if not self.credential_path.exists():
+        """Validate the configured secret without logging or persisting it."""
+        token = self.mam_id
+        if token is None or token == "":
             raise PollError("session_not_configured")
-        if self.credential_path.stat().st_mode & 0o077:
-            raise PollError("session_permissions")
-        data = load_private(self.credential_path)
-        token = data.get("mam_id")
         if (
             not isinstance(token, str)
             or not token.strip()
             or any(c.isspace() for c in token)
         ):
-            raise PollError("invalid_session_file")
+            raise PollError("invalid_session")
         return token, sha256(token.encode()).hexdigest()
 
     def fetch(self, token: str, *, reset_cookies: bool) -> dict[str, Any]:

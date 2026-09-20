@@ -7,21 +7,25 @@ settings, spend bonus points, or call the Dynamic Seedbox API.
 
 ## Credentials and configuration
 
-`apps.yaml` supplies the existing qBittorrent and MQTT secrets. A separate MAM API
-session must permit Home Assistant's egress; the monitor does not use the VPN IP
-updater's session. Inside the AppDaemon runtime, run:
+`apps.yaml` supplies the MAM, qBittorrent and MQTT credentials through `!secret`
+references to Home Assistant's `/homeassistant/secrets.yaml`. Set the dedicated
+MAM API session in that file:
 
-```sh
-python /homeassistant/appdaemon/tools/mam/set_session.py /data/mam
+```yaml
+mam_monitor_mam_id: "YOUR_DEDICATED_MAM_SESSION"
 ```
 
-Use the actual repository path when the checkout is mounted elsewhere. The tool
-uses a hidden terminal prompt and writes `session.json` with mode 0600; `/data/mam`
-is mode 0700. Do not put the session in Git, chat, logs, or command arguments.
-Server cookie rotations are stored separately in `cookies.txt`. Replacing the
-session resumes authentication on the next scheduled poll. Authentication errors
-block further MAM requests with that credential. Cooldowns and backoff survive
-restarts; deleting runtime state is not an appropriate retry mechanism.
+The session must permit Home Assistant's egress; the monitor does not use the VPN
+IP updater's session. An empty string leaves MAM unconfigured while qBittorrent
+monitoring continues. Reload the AppDaemon app or restart AppDaemon after editing
+the secret. Do not put the session in Git, chat, logs, or command arguments.
+
+The configured session is not copied to a separate credential file. Server cookie
+rotations are stored privately in `/data/mam/cookies.txt` (mode 0600, directory
+0700). Changing the configured session resets those cookies on its next scheduled
+poll. Authentication errors block further MAM requests with that credential.
+Cooldowns and backoff survive restarts; deleting runtime state is not an
+appropriate retry mechanism.
 
 `input_number.mam_download_reserve_gib` controls the spare credit in GiB. The app
 initializes a new zero-valued helper to 2 once and persists that initialization.

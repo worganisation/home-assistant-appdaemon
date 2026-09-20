@@ -56,7 +56,7 @@ class MamMonitor(hass.Hass):
                 source,
                 {"next_poll": 0, "last_success": 0, "error": "not_polled", "failures": 0},
             )
-        self.mam = MamClient(self.directory)
+        self.mam = MamClient(self.directory, self.args.get("mam_id"))
         self.qbt = QbtClient(
             str(self.args["qbittorrent_url"]),
             str(self.args["qbittorrent_username"]),
@@ -250,8 +250,7 @@ class MamMonitor(hass.Hass):
             not in {
                 "authentication_failed",
                 "session_not_configured",
-                "invalid_session_file",
-                "session_permissions",
+                "invalid_session",
             }
         )
 
