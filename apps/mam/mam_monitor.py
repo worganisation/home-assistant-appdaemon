@@ -318,7 +318,15 @@ class MamMonitor(hass.Hass):
                 "source": "qBittorrent estimates; not tracker-confirmed satisfaction",
             },
         )
-        self.publish("notices", {"messages": notices if mam_fresh else []})
+        self.publish(
+            "notices",
+            {
+                "messages": notices if mam_fresh else [],
+                "counts": self.state["account"].get("notification_counts", {})
+                if mam_fresh
+                else {},
+            },
+        )
         self.publish(
             "issues",
             {

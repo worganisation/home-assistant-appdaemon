@@ -69,10 +69,67 @@ def path_value(data: dict[str, Any], path: Any) -> Any:
     return current
 
 
+def count_value(value: Any) -> int | None:
+    """Accept nonnegative integral counters without treating booleans as counts."""
+    parsed = number(value)
+    return (
+        int(parsed)
+        if parsed is not None and parsed >= 0 and parsed.is_integer()
+        else None
+    )
+
+
+def mapped_count(data: dict[str, Any], path: Any) -> int | None:
+    """Sum verified disjoint categories only when every component is available."""
+    if isinstance(path, list) and path and all(isinstance(item, list) for item in path):
+        counts = [count_value(path_value(data, item)) for item in path]
+        return (
+            sum(value for value in counts if value is not None)
+            if all(value is not None for value in counts)
+            else None
+        )
+    return count_value(path_value(data, path))
+
+
+NOTICE_LABELS = {
+    "pms": "Private-message notifications",
+    "aboutToDropClient": "Clients about to be dropped",
+    "tickets": "Ticket notifications",
+    "waiting_tickets": "Waiting-ticket notifications",
+    "requests": "Request notifications",
+    "topics": "Topic notifications",
+}
+
+
+def account_notices(value: Any) -> tuple[list[str], bool, dict[str, int]]:
+    """Render allowlisted notification counters without exposing message contents."""
+    if isinstance(value, list):
+        return (
+            [safe_text(item, 240) for item in value[:10] if isinstance(item, str)],
+            all(isinstance(item, str) for item in value),
+            {},
+        )
+    if not isinstance(value, dict):
+        return [], False, {}
+    counts = {key: count_value(value.get(key)) for key in NOTICE_LABELS}
+    available = all(count is not None for count in counts.values())
+    counters = {key: count for key, count in counts.items() if count is not None}
+    messages = [
+        f"{NOTICE_LABELS[key]}: {count}" for key, count in counters.items() if count
+    ]
+    if value.get("iCloudRelay") is True:
+        messages.append("MAM reports iCloud Private Relay in use.")
+    return messages, available, counters
+
+
 def account_snapshot(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, Any]:
     """Normalize documented fields; optional unmapped fields stay unknown."""
-    uploaded = size_bytes(data.get("uploaded"))
-    downloaded = size_bytes(data.get("downloaded"))
+    uploaded = count_value(data.get("uploaded_bytes"))
+    downloaded = count_value(data.get("downloaded_bytes"))
+    if uploaded is None:
+        uploaded = size_bytes(data.get("uploaded"))
+    if downloaded is None:
+        downloaded = size_bytes(data.get("downloaded"))
     if not data.get("uid") or uploaded is None or downloaded is None:
         raise ValueError("Unrecognized account response")
     result: dict[str, Any] = {
@@ -83,29 +140,42 @@ def account_snapshot(data: dict[str, Any], paths: dict[str, Any]) -> dict[str, A
         "bonus": number(data.get("seedbonus")),
         "credit": (uploaded - downloaded) / GIB,
     }
-    for key in ("unsatisfied", "limit", "satisfied", "seeding", "leeching"):
-        value = number(path_value(data, paths.get(key)))
-        result[key] = (
-            int(value)
-            if value is not None and value >= 0 and value.is_integer()
-            else None
-        )
+    for key in (
+        "unsatisfied",
+        "limit",
+        "satisfied",
+        "seeding",
+        "leeching",
+        "wedges",
+        "hnr",
+        "inactive_unsatisfied",
+    ):
+        result[key] = mapped_count(data, paths.get(key))
     connected = path_value(data, paths.get("connectable"))
+    if isinstance(connected, str):
+        connected = {"yes": True, "no": False}.get(connected.strip().lower())
     result["connectable"] = connected if isinstance(connected, bool) else None
-    # Notification keys/values are not documented sufficiently to relay arbitrary
-    # nested content safely. Only explicitly mapped plain-text notices are shown.
-    notices = path_value(data, paths.get("notices"))
-    result["notices"] = (
-        [safe_text(item, 240) for item in notices[:10] if isinstance(item, str)]
-        if isinstance(notices, list)
-        else []
+    notices, available, counters = account_notices(path_value(data, paths.get("notices")))
+    result["notices"] = notices
+    result["notices_available"] = available
+    result["notification_counts"] = counters
+    result["notification_count"] = (
+        sum(counters.values()) if available and counters else None
     )
-    result["notices_available"] = isinstance(notices, list)
     result["coverage"] = (
         "complete"
         if all(
             result[key] is not None
-            for key in ("unsatisfied", "connectable", "ratio", "bonus")
+            for key in (
+                "unsatisfied",
+                "limit",
+                "satisfied",
+                "seeding",
+                "leeching",
+                "connectable",
+                "ratio",
+                "bonus",
+            )
         )
         and result["notices_available"]
         else "partial"
@@ -277,7 +347,7 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
         if account.get("coverage") != "complete":
             issues["account_partial"] = (
                 "warning",
-                "Optional MAM response fields need verification; coverage is partial.",
+                "Some MAM account fields are missing or unrecognized; coverage is partial.",
             )
         if account.get("ratio") is not None and account["ratio"] < 1:
             issues["ratio"] = ("critical", "MAM account ratio is below 1.0.")
@@ -290,6 +360,16 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
             issues["site_notice"] = (
                 "warning",
                 "MAM has account notices. Review the dashboard and MAM website.",
+            )
+        if (account.get("hnr") or 0) > 0:
+            issues["tracker_hnr"] = (
+                "critical",
+                "MAM reports hit-and-run torrents. Review them on MAM.",
+            )
+        if (account.get("inactive_unsatisfied") or 0) > 0:
+            issues["tracker_inactive_unsatisfied"] = (
+                "warning",
+                "MAM reports inactive unsatisfied torrents. Resume seeding them.",
             )
         count = account.get("unsatisfied")
         if count is not None and limit is not None:

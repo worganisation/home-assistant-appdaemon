@@ -94,6 +94,27 @@ SENSORS = (
         "torrents",
         state_class="measurement",
     ),
+    Sensor("wedges", "Freeleech wedges", "mam", state_class="measurement"),
+    Sensor(
+        "hnr",
+        "Tracker hit-and-run torrents",
+        "mam",
+        "torrents",
+        state_class="measurement",
+    ),
+    Sensor(
+        "inactive_unsatisfied",
+        "Inactive unsatisfied torrents",
+        "mam",
+        "torrents",
+        state_class="measurement",
+    ),
+    Sensor(
+        "notification_count",
+        "Site notification count",
+        "mam",
+        state_class="measurement",
+    ),
     Sensor("connectable", "Tracker connectability", "mam"),
     Sensor("coverage", "Account data coverage", "mam"),
     Sensor(

@@ -37,30 +37,30 @@ An API-provided limit takes precedence. Otherwise a positive override applies;
 known class limits follow, with User conservatively limited to 20 because account
 age is not documented. Unknown classes have an unavailable limit.
 
-## Optional response fields
+## Tracker response fields
 
-The supplied API documentation specifies the top-level `classname`, `uploaded`,
-`downloaded`, `ratio`, and `seedbonus` fields. It names optional `clientStats`,
-`notif`, and `snatch_summary` request flags but does not define their response
-structures. The monitor requests these flags but does not guess their schemas.
+`response_paths` maps verified `jsonLoad.php` fields. Unsatisfied count and limit
+come from `unsat.count` and `unsat.limit`; satisfied totals combine `sSat` and
+`inactSat`. Seeding totals combine `sSat`, `seedUnsat`, `seedHnr`, and `upAct`.
+Hit-and-run totals combine `seedHnr` and `inactHnr`. Nested lists of paths sum
+these disjoint categories only when every count is valid. Missing data remains
+unknown rather than silently becoming zero. Category `red` flags are not counts
+and do not create alerts on their own.
 
-`response_paths` maps the following normalized names to lists of verified JSON
-object keys: `unsatisfied`, `limit`, `satisfied`, `seeding`, `leeching`, `connectable`,
-and `notices`. Paths are empty by default. Count values must be nonnegative
-integers; connectivity must be a JSON boolean; notices must be a list of plain
-strings. Arbitrary nested objects, URLs, cookie values, and raw tracker messages
-are not published. Verify the optional schema from an authenticated response
-privately before populating these paths. Until then, affected sensors remain
-unknown and account coverage explicitly reads `partial`.
+Connectivity accepts JSON booleans or MAM's `yes`/`no` strings. Notification
+counters are restricted to private messages, clients about to be dropped,
+tickets, waiting tickets, requests, and topics; they appear as counts and labels,
+never message contents. The notices entity also exposes the counter breakdown.
+The API's `wedges` balance is tracked without spending any wedges.
 
-No endpoint for tracker-confirmed per-torrent seed times, personal deadlines,
-wedge balance, or VIP expiry is established by the supplied documentation.
-The monitor does not scrape website pages to fill these gaps.
+Exact `uploaded_bytes` and `downloaded_bytes` take precedence over formatted
+values. Tracker-confirmed per-torrent seed times, personal deadlines and VIP
+expiry remain unavailable; the monitor does not scrape website pages.
 
 ## Interpretation
 
 Credited upload includes purchased credit. It is not qBittorrent's uploaded-byte
-counter. MAM's formatted account totals are approximate. Download budget is
+counter. Formatted account totals are an approximate fallback when exact bytes are absent. Download budget is
 credited upload minus counted download, all locally outstanding MAM file bytes,
 and the configurable reserve. Outstanding freeleech downloads are conservatively
 counted because their status is unverified. Tracker reporting delay can make this

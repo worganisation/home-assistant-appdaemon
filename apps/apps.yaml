@@ -347,5 +347,15 @@ mam_monitor:
   mqtt_password: !secret appdaemon_mqtt_password
   mqtt_discovery_prefix: homeassistant
   mqtt_base_topic: appdaemon/mam
-  # Optional response paths are populated only from a verified API response.
-  response_paths: {}
+  # Verified jsonLoad.php fields; nested path lists sum disjoint categories.
+  response_paths:
+    unsatisfied: [unsat, count]
+    limit: [unsat, limit]
+    satisfied: [[sSat, count], [inactSat, count]]
+    seeding: [[sSat, count], [seedUnsat, count], [seedHnr, count], [upAct, count]]
+    leeching: [leeching, count]
+    connectable: [connectable]
+    notices: [notifs]
+    wedges: [wedges]
+    hnr: [[seedHnr, count], [inactHnr, count]]
+    inactive_unsatisfied: [inactUnsat, count]
