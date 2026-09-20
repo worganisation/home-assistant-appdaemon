@@ -152,6 +152,18 @@ the latest TinyTuya payload when troubleshooting.
 MQTT state topics are retained so Home Assistant can restore the climate entity quickly
 after restart.
 
-If the AC is unreachable, the app logs the TinyTuya error, marks availability offline
-on MQTT, updates the raw sensor with error details when configured, and retries on the
-next scheduled poll.
+The climate entity starts unavailable until a poll returns a nonempty DPS dictionary.
+MQTT reconnects republish the last established availability without clearing device
+failures or treating a broker connection as proof that the AC is reachable. Valid
+state values are published before the entity becomes available.
+
+If the AC is unreachable, the app logs the TinyTuya error, updates the raw sensor with
+error details when configured, and retries on the next scheduled poll. After
+`availability_failure_threshold` consecutive failures (default `3`, minimum `1`),
+availability is offline. A successful poll resets the failure count. Invalid or empty
+DPS payloads count as failures. TinyTuya sockets are closed on failure and shutdown.
+
+Each MQTT client ID must have exactly one active owner. Repeated MQTT disconnects
+can indicate duplicate AppDaemon instances or surviving clients after a reload;
+check broker logs for `already connected` messages. Changing the client ID does not
+resolve multiple apps publishing to the same state and availability topics.
