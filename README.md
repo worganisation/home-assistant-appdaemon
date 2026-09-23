@@ -1,5 +1,10 @@
 # Home Assistant: AppDaemon
 
+## MAM account and seeding monitor
+
+[Configuration, data coverage and validation](apps/mam/README.md) for the MAM
+account sensors, conservative download budget and individual torrent diagnostics.
+
 ## qBittorrent Storage Cleanup
 
 `apps/qbittorrent/storage_cleanup.py` watches the qBittorrent scratch-storage

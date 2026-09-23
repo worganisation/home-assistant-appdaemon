@@ -327,3 +327,35 @@ starling_joint_balance_getter:
   reauth_trigger: input_button.oauth_reauth_truelayer_starling_joint
   account_ids:
     account: !secret truelayer_starling_joint_account_id
+
+# MAM account and seeding monitoring
+
+mam_monitor:
+  module: mam.mam_monitor
+  class: MamMonitor
+  state_directory: /data/mam
+  mam_id: !secret mam_monitor_mam_id
+  reserve_entity: input_number.mam_download_reserve_gib
+  limit_override_entity: input_number.mam_unsatisfied_limit_override
+  notify_script: script.notify_will
+  qbittorrent_url: !secret qbittorrent_url
+  qbittorrent_username: !secret qbittorrent_username
+  qbittorrent_password: !secret qbittorrent_password
+  mqtt_host: !secret appdaemon_mqtt_host
+  mqtt_port: 1883
+  mqtt_username: !secret appdaemon_mqtt_username
+  mqtt_password: !secret appdaemon_mqtt_password
+  mqtt_discovery_prefix: homeassistant
+  mqtt_base_topic: appdaemon/mam
+  # Verified jsonLoad.php fields; nested path lists sum disjoint categories.
+  response_paths:
+    unsatisfied: [unsat, count]
+    limit: [unsat, limit]
+    satisfied: [[sSat, count], [inactSat, count]]
+    seeding: [[sSat, count], [seedUnsat, count], [seedHnr, count], [upAct, count]]
+    leeching: [leeching, count]
+    connectable: [connectable]
+    notices: [notifs]
+    wedges: [wedges]
+    hnr: [[seedHnr, count], [inactHnr, count]]
+    inactive_unsatisfied: [inactUnsat, count]
