@@ -123,7 +123,11 @@ class BankBalanceGetter(OAuthFlowConsumerMixin, Hass):
                     self.call_service(
                         "var/set",
                         entity_id=variable_id,
-                        value=entity.balance,
+                        value=(
+                            entity.current_balance
+                            if entity_key == EntityType.CARD
+                            else entity.balance
+                        ),
                         force_update=True,
                     )
             except (HTTPError, RuntimeError) as err:
