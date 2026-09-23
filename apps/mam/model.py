@@ -103,12 +103,6 @@ NOTICE_LABELS = {
 
 def account_notices(value: Any) -> tuple[list[str], bool, dict[str, int]]:
     """Render allowlisted notification counters without exposing message contents."""
-    if isinstance(value, list):
-        return (
-            [safe_text(item, 240) for item in value[:10] if isinstance(item, str)],
-            all(isinstance(item, str) for item in value),
-            {},
-        )
     if not isinstance(value, dict):
         return [], False, {}
     counts = {key: count_value(value.get(key)) for key in NOTICE_LABELS}

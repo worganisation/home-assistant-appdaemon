@@ -341,7 +341,7 @@ class MamMonitor(hass.Hass):
             self.notify_issues(issues, now, mam_fresh=mam_fresh, qbt_fresh=qbt_fresh)
             self.persist()
 
-    def notify_issues(  # noqa: C901 - independent issue debounce and recovery paths
+    def notify_issues(  # noqa: C901, PLR0912 - independent issue debounce and recovery paths
         self,
         issues: dict[str, tuple[str, str]],
         now: float,
@@ -353,6 +353,8 @@ class MamMonitor(hass.Hass):
         alerts = self.state["alerts"]
         messages = []
         critical = False
+        sent_updates: dict[str, tuple[str, str]] = {}
+        cleared_alerts: list[str] = []
         for key, (severity, message) in issues.items():
             alert = alerts.setdefault(
                 key,
@@ -375,9 +377,7 @@ class MamMonitor(hass.Hass):
             if eligible and due:
                 messages.append(message)
                 critical |= severity == "critical"
-                alert.update(
-                    {"last_sent": now, "severity": severity, "last_message": message},
-                )
+                sent_updates[key] = severity, message
         for key in list(alerts):
             if key in issues:
                 continue
@@ -400,8 +400,10 @@ class MamMonitor(hass.Hass):
                         key.split(":")[-1].replace("_", " "),
                     ),
                 )
-            del alerts[key]
+            cleared_alerts.append(key)
         if not messages:
+            for key in cleared_alerts:
+                del alerts[key]
             return
         self.persist()
         try:
@@ -427,3 +429,11 @@ class MamMonitor(hass.Hass):
             )
         except Exception:
             self.log("MAM monitor notification delivery failed", level="WARNING")
+            return
+        for key, (severity, message) in sent_updates.items():
+            alerts[key].update(
+                {"last_sent": now, "severity": severity, "last_message": message},
+            )
+        for key in cleared_alerts:
+            del alerts[key]
+        self.persist()
