@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.33.1 (2026-09-24)
+
+### Bug Fixes
+
+- **mam**: Notify immediately when account sessions fail
+  ([#323](https://github.com/worganisation/home-assistant-appdaemon/pull/323),
+  [`7c91376`](https://github.com/worganisation/home-assistant-appdaemon/commit/7c91376f9e4a2569174ff58caf03df9872dd7a09))
+
+
 ## v0.33.0 (2026-09-24)
 
 ### Bug Fixes
