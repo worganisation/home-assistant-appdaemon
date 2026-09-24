@@ -323,11 +323,24 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
     qbt_fresh: bool,
     reserve: float,
     limit_override: int,
+    mam_error: str = "",
 ) -> tuple[dict[str, Any], dict[str, tuple[str, str]]]:
     """Return sensor values and stable issue IDs with severity and safe messages."""
     values = dict(account) if mam_fresh else {}
     issues: dict[str, tuple[str, str]] = {}
-    if not mam_fresh:
+    if mam_error in {
+        "authentication_failed",
+        "invalid_session",
+        "session_not_configured",
+    }:
+        issues["mam_session"] = (
+            "warning",
+            "MAM account session is missing or invalid. It may have expired or been revoked, "
+            "or its IP/ASN permissions may not match Home Assistant. Create a dedicated "
+            "MAM API session, update mam_monitor_mam_id in Home Assistant secrets.yaml, "
+            "then reload the MAM app or restart AppDaemon. Account data is unavailable.",
+        )
+    elif not mam_fresh:
         issues["mam_stale"] = ("warning", "MAM account data is unavailable or stale.")
     if not qbt_fresh:
         issues["qbt_stale"] = ("warning", "qBittorrent data is unavailable or stale.")

@@ -282,6 +282,7 @@ class MamMonitor(hass.Hass):
             qbt_fresh=qbt_fresh,
             reserve=self.reserve(),
             limit_override=override,
+            mam_error=self.state["mam"]["error"],
         )
         for source, fresh in (("mam", mam_fresh), ("qbt", qbt_fresh)):
             record = self.state[source]
@@ -388,11 +389,17 @@ class MamMonitor(hass.Hass):
             )
             if key == "budget":
                 dependencies_fresh = mam_fresh and qbt_fresh
+            if key == "mam_session":
+                dependencies_fresh = mam_fresh and not self.state["mam"]["error"]
             if not dependencies_fresh:
                 continue
             if alerts[key]["last_sent"]:
-                messages.append(
-                    "MAM notification counters are now clear."
+                # Keep session recovery visible even when other updates fill the batch.
+                messages.insert(
+                    0 if key == "mam_session" else len(messages),
+                    "MAM account authentication recovered; account data is available again."
+                    if key == "mam_session"
+                    else "MAM notification counters are now clear."
                     if key == "site_notice"
                     else "Cleared alert: "
                     + alerts[key].get(

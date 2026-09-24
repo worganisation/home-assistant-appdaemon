@@ -87,7 +87,13 @@ restarts. `no_detected_issues` is not a compliance guarantee.
 
 Notifications use `script.notify_will`, link to `/mam-monitor/overview`, debounce
 transient client/connectability problems for 15 minutes, and deduplicate across
-restarts. Site-notice alerts name each notification type, count and where to
+restarts. Missing, invalid, or rejected MAM sessions notify immediately on detection,
+without waiting for the 90-minute stale-data threshold. The alert explains session
+replacement, the `mam_monitor_mam_id` secret, and the AppDaemon reload requirement;
+it repeats neither the credential nor raw API responses. Unchanged session failures
+stay quiet, and a successful fresh account poll sends an explicit recovery notification.
+Transport and other source failures retain the stale-data alert and polling backoff.
+Site-notice alerts name each notification type, count and where to
 review it on MAM; they update when that summary changes and stay quiet while
 unchanged. Cleared notices are reported explicitly. No private-message or ticket
 contents are fetched. Critical unresolved issues repeat at most daily; fresh source data is
