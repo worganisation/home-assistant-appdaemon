@@ -394,7 +394,9 @@ class MamMonitor(hass.Hass):
             if not dependencies_fresh:
                 continue
             if alerts[key]["last_sent"]:
-                messages.append(
+                # Keep session recovery visible even when other updates fill the batch.
+                messages.insert(
+                    0 if key == "mam_session" else len(messages),
                     "MAM account authentication recovered; account data is available again."
                     if key == "mam_session"
                     else "MAM notification counters are now clear."
