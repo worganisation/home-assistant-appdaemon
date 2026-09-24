@@ -2,6 +2,68 @@
 
 <!-- version list -->
 
+## v0.33.0 (2026-09-24)
+
+### Bug Fixes
+
+- **ci**: Pin semantic release to reachable workflow commit
+  ([#322](https://github.com/worganisation/home-assistant-appdaemon/pull/322),
+  [`e2b2338`](https://github.com/worganisation/home-assistant-appdaemon/commit/e2b2338313b7736f3e3848540668aa3493172e93))
+
+- **cursor**: Handle empty usage periods
+  ([#315](https://github.com/worganisation/home-assistant-appdaemon/pull/315),
+  [`5c72896`](https://github.com/worganisation/home-assistant-appdaemon/commit/5c72896942f439e12c686f7a5e61196e7014a022))
+
+- **pro-breeze**: Preserve device health across MQTT reconnects
+  ([#316](https://github.com/worganisation/home-assistant-appdaemon/pull/316),
+  [`3dd6106`](https://github.com/worganisation/home-assistant-appdaemon/commit/3dd61063087a1dc3b9c87e6068a669f7af4e987e))
+
+- **truelayer**: Use current balance for credit cards
+  ([#321](https://github.com/worganisation/home-assistant-appdaemon/pull/321),
+  [`a086c0d`](https://github.com/worganisation/home-assistant-appdaemon/commit/a086c0d388a9b5e362934558010756813f5a73e6))
+
+### Build System
+
+- **deps**: Bump httpx2 ([#314](https://github.com/worganisation/home-assistant-appdaemon/pull/314),
+  [`85cbcad`](https://github.com/worganisation/home-assistant-appdaemon/commit/85cbcade1d1ba5e7bd0912dc40214b358b9ed3f2))
+
+- **deps**: Bump the uv-dependencies group with 5 updates
+  ([#313](https://github.com/worganisation/home-assistant-appdaemon/pull/313),
+  [`86f6ead`](https://github.com/worganisation/home-assistant-appdaemon/commit/86f6ead1fd2fef6d8444d507baed8e93b9b614d0))
+
+### Chores
+
+- **deps**: Configure Renovate updates
+  ([#318](https://github.com/worganisation/home-assistant-appdaemon/pull/318),
+  [`de358ac`](https://github.com/worganisation/home-assistant-appdaemon/commit/de358ac349900161699bc431a5bc6409a3c1b03d))
+
+- **sync**: Pin github-config-files workflows to 0.8.6
+  ([#310](https://github.com/worganisation/home-assistant-appdaemon/pull/310),
+  [`e7dac7d`](https://github.com/worganisation/home-assistant-appdaemon/commit/e7dac7deeebc97b4db4ce0c4d13ecdd938f20261))
+
+- **sync**: Pin github-config-files workflows to 0.8.7
+  ([#311](https://github.com/worganisation/home-assistant-appdaemon/pull/311),
+  [`bfc5d4c`](https://github.com/worganisation/home-assistant-appdaemon/commit/bfc5d4c773c54764a67258ea22bfbf4f7ec5b464))
+
+### Features
+
+- Add persistent AI repair catalogue
+  ([#312](https://github.com/worganisation/home-assistant-appdaemon/pull/312),
+  [`c7233ef`](https://github.com/worganisation/home-assistant-appdaemon/commit/c7233ef1b6044e70b6c4474cdb45198fb1b07683))
+
+- **ci**: Require manually invoked semantic releases
+  ([#319](https://github.com/worganisation/home-assistant-appdaemon/pull/319),
+  [`abd0fc9`](https://github.com/worganisation/home-assistant-appdaemon/commit/abd0fc9e46d45fe01acbaef62a6d8169cb07753e))
+
+- **mam**: Monitor account credit and torrent seeding risks
+  ([#317](https://github.com/worganisation/home-assistant-appdaemon/pull/317),
+  [`ea52666`](https://github.com/worganisation/home-assistant-appdaemon/commit/ea52666932fbdc4cfec43f74bbfaae301d627682))
+
+- **mood**: Add receptivity-aware prompt groundwork
+  ([#309](https://github.com/worganisation/home-assistant-appdaemon/pull/309),
+  [`a8546cf`](https://github.com/worganisation/home-assistant-appdaemon/commit/a8546cf69bb39fdc4c0896f5675a9ff26fbdead3))
+
+
 ## v0.32.2 (2026-09-01)
 
 ### Bug Fixes
