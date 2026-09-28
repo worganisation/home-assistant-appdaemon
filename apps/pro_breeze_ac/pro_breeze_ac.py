@@ -103,6 +103,10 @@ class ProBreezeAC(hass.Hass):
                 if self.mqtt_client is not None:
                     try:
                         self._publish_mqtt_availability(is_available=False)
+                        self._publish_mqtt(
+                            self._mqtt_topic("app/availability"),
+                            "offline",
+                        )
                     finally:
                         try:
                             self.mqtt_client.disconnect()
@@ -239,7 +243,7 @@ class ProBreezeAC(hass.Hass):
         self.mqtt_client.on_message = self._handle_mqtt_message
         self.mqtt_client.on_disconnect = self._handle_mqtt_disconnect
         self.mqtt_client.will_set(
-            self._mqtt_topic("availability"),
+            self._mqtt_topic("app/availability"),
             "offline",
             qos=self.mqtt_qos,
             retain=True,
@@ -304,6 +308,7 @@ class ProBreezeAC(hass.Hass):
             self._mqtt_topic("polling_enabled/state"),
             "ON" if self._polling_enabled else "OFF",
         )
+        self._publish_mqtt(self._mqtt_topic("app/availability"), "online")
 
     def _handle_mqtt_disconnect(
         self,
@@ -370,7 +375,11 @@ class ProBreezeAC(hass.Hass):
             "name": self.mqtt_name,
             "unique_id": self.mqtt_unique_id,
             "object_id": self.mqtt_object_id,
-            "availability_topic": self._mqtt_topic("availability"),
+            "availability": [
+                {"topic": self._mqtt_topic(topic)}
+                for topic in ("app/availability", "availability")
+            ],
+            "availability_mode": "all",
             "payload_available": "online",
             "payload_not_available": "offline",
             "mode_command_topic": self._mqtt_command_topics["mode"],
@@ -412,6 +421,7 @@ class ProBreezeAC(hass.Hass):
             "object_id": f"{self.mqtt_object_id}_polling_enabled",
             "command_topic": self._mqtt_command_topics["polling_enabled"],
             "state_topic": self._mqtt_topic("polling_enabled/state"),
+            "availability_topic": self._mqtt_topic("app/availability"),
             "payload_on": "ON",
             "payload_off": "OFF",
             "retain": True,

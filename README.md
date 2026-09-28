@@ -131,7 +131,9 @@ when the AC is plugged in and off when it is unplugged. Off cancels TinyTuya pol
 closes the device socket, ignores climate commands, and marks the climate entity
 unavailable. The switch command is retained by the MQTT broker, so the setting
 survives AppDaemon restarts. Polling defaults to off until a retained on command or
-a new switch command is received.
+a new switch command is received. The switch is unavailable when AppDaemon is
+disconnected; the climate entity also requires both AppDaemon and the AC to be
+available.
 
 Configure an MQTT user for AppDaemon and provide these secrets:
 
