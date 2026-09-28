@@ -130,8 +130,38 @@ class QbittorrentWebApi:
         *,
         can_delete: Callable[[], bool],
     ) -> bool:
-        """Recheck Home Assistant state after login before deleting exact content."""
+        """Refresh torrent eligibility and Home Assistant state before deletion."""
         with self._authenticated_session() as session:
+            torrents = self._json_list(
+                self._request(
+                    session,
+                    "GET",
+                    "/api/v2/torrents/info",
+                    params={"filter": "seeding", "hashes": torrent_hash},
+                ),
+            )
+            refreshed = rank_seeders(
+                torrents,
+                ratio_progress_weight=self.ratio_progress_weight,
+                ratio_target=self.ratio_target,
+                seeding_days_target=self.seeding_days_target,
+            )
+            candidate = next(
+                (item for item in refreshed if item.hash == torrent_hash),
+                None,
+            )
+            if candidate is None or candidate.is_uploading:
+                return False
+            trackers = self._json_list(
+                self._request(
+                    session,
+                    "GET",
+                    "/api/v2/torrents/trackers",
+                    params={"hash": torrent_hash},
+                ),
+            )
+            if any(is_mam_tracker(item.get("url")) for item in trackers):
+                return False
             if not can_delete():
                 return False
             self._request(
@@ -499,6 +529,9 @@ class QbittorrentStorageCleanup(Hass):
         usage = self._usage(self.get_state(self.storage_entity))
         if usage is not None and usage >= self._current_threshold():
             self._offer_cleanup(usage)
+        elif usage is not None:
+            self._threshold_active = False
+            self._clear_notification()
 
     def _notification_action(
         self,
@@ -578,6 +611,9 @@ class QbittorrentStorageCleanup(Hass):
             return
 
         if not deleted:
+            if self._ready_to_delete(automatic=automatic):
+                self._post_delete_check_pending = True
+                self.run_in(self._retry_cleanup, 5)
             return
 
         self._notify(
@@ -596,6 +632,16 @@ class QbittorrentStorageCleanup(Hass):
         self._threshold_active = False
         self._post_delete_check_pending = True
         self.run_in(self._post_delete_check, self.post_delete_check_delay)
+
+    def _retry_cleanup(self, _kwargs: dict[str, Any]) -> None:
+        """Offer a fresh candidate when a selected torrent becomes ineligible."""
+        self._post_delete_check_pending = False
+        usage = self._usage(self.get_state(self.storage_entity))
+        if usage is not None and usage >= self._current_threshold():
+            self._offer_cleanup(usage)
+        elif usage is not None:
+            self._threshold_active = False
+            self._clear_notification()
 
     def _ready_to_delete(self, *, automatic: bool) -> bool:
         """Reject stale, below-threshold or disabled automatic cleanup."""
