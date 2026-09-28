@@ -4,10 +4,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from re import compile as compile_regex
-from typing import Any, Final
+from time import monotonic
+from typing import TYPE_CHECKING, Any, Final
 
 from appdaemon.plugins.hass.hassapi import Hass
+from mam.model import is_mam_tracker
 from requests import RequestException, Response, Session
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 BYTES_PER_UNIT: Final = 1024
 SECONDS_PER_DAY: Final = 24 * 60 * 60
@@ -84,7 +89,7 @@ class QbittorrentWebApi:
         self.timeout = timeout
 
     def ranked_seeders(self) -> list[TorrentCandidate]:
-        """Return eligible seeders ordered by share history."""
+        """Return eligible seeders after checking every configured tracker."""
         with self._authenticated_session() as session:
             torrents = self._json_list(
                 self._request(
@@ -94,22 +99,48 @@ class QbittorrentWebApi:
                     params={"filter": "seeding"},
                 ),
             )
-        return rank_seeders(
-            torrents,
-            ratio_progress_weight=self.ratio_progress_weight,
-            ratio_target=self.ratio_target,
-            seeding_days_target=self.seeding_days_target,
-        )
+            ranked = rank_seeders(
+                torrents,
+                ratio_progress_weight=self.ratio_progress_weight,
+                ratio_target=self.ratio_target,
+                seeding_days_target=self.seeding_days_target,
+            )
+            deadline = monotonic() + 120
+            eligible: list[TorrentCandidate] = []
+            for candidate in ranked:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise QbittorrentError("qBittorrent tracker check timed out")
+                trackers = self._json_list(
+                    self._request(
+                        session,
+                        "GET",
+                        "/api/v2/torrents/trackers",
+                        params={"hash": candidate.hash},
+                        timeout=min(self.timeout, remaining),
+                    ),
+                )
+                if not any(is_mam_tracker(item.get("url")) for item in trackers):
+                    eligible.append(candidate)
+            return eligible
 
-    def delete_with_files(self, torrent_hash: str) -> None:
-        """Delete one exact torrent and its downloaded content."""
+    def delete_with_files(
+        self,
+        torrent_hash: str,
+        *,
+        can_delete: Callable[[], bool],
+    ) -> bool:
+        """Recheck Home Assistant state after login before deleting exact content."""
         with self._authenticated_session() as session:
+            if not can_delete():
+                return False
             self._request(
                 session,
                 "POST",
                 "/api/v2/torrents/delete",
                 data={"hashes": torrent_hash, "deleteFiles": "true"},
             )
+        return True
 
     def restart_errored(self) -> list[str]:
         """Start torrents currently reported in qBittorrent's errored filter."""
@@ -171,7 +202,7 @@ class QbittorrentWebApi:
             response = session.request(
                 method,
                 f"{self.base_url}{path}",
-                timeout=self.timeout,
+                timeout=kwargs.pop("timeout", self.timeout),
                 **kwargs,
             )
             response.raise_for_status()
@@ -225,9 +256,6 @@ def rank_seeders(
             continue
         if str(torrent.get("category", "")).lower() == "shelfarr":
             continue
-        if "myanonamouse.net" in str(torrent.get("tracker", "")).lower():
-            continue
-
         ratio = max(_as_float(torrent.get("ratio")), 0.0)
         seeding_seconds = max(_as_int(torrent.get("seeding_time")), 0)
         ratio_progress = ratio / ratio_target
@@ -536,7 +564,10 @@ class QbittorrentStorageCleanup(Hass):
             return
 
         try:
-            self.client.delete_with_files(candidate.hash)
+            deleted = self.client.delete_with_files(
+                candidate.hash,
+                can_delete=lambda: self._ready_to_delete(automatic=automatic),
+            )
         except QbittorrentError as error:
             self.error("Unable to delete qBittorrent torrent: %s", error)
             self._notify(
@@ -544,6 +575,9 @@ class QbittorrentStorageCleanup(Hass):
                 message=f"qBittorrent reported: {error}",
                 icon="mdi:delete-alert",
             )
+            return
+
+        if not deleted:
             return
 
         self._notify(
