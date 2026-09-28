@@ -1,17 +1,21 @@
-"""Offer torrent deletion when storage is full and restart errored torrents."""
+"""Delete eligible torrents when storage is full and restart errored torrents."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from re import compile as compile_regex
-from typing import Any, Final
+from time import monotonic
+from typing import TYPE_CHECKING, Any, Final
 
 from appdaemon.plugins.hass.hassapi import Hass
+from mam.model import is_mam_tracker
 from requests import RequestException, Response, Session
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 BYTES_PER_UNIT: Final = 1024
-SECONDS_PER_MINUTE: Final = 60
-USE_GLOBAL_LIMIT: Final = -2.0
+SECONDS_PER_DAY: Final = 24 * 60 * 60
 ACTION_PREFIX: Final = "DELETE_QBT_TORRENT_"
 TORRENT_HASH_PATTERN: Final = compile_regex(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 
@@ -22,19 +26,19 @@ class QbittorrentError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class TorrentCandidate:
-    """A seeding torrent and its progress towards automatic removal."""
+    """A seeding torrent and its progress towards cleanup ranking targets."""
 
     hash: str
     name: str
     size: int
     ratio: float
-    ratio_limit: float | None
+    ratio_target: float
     upload_speed: int
     seeding_seconds: int
-    time_limit_seconds: float | None
+    time_target_seconds: float
     closeness: float
     deletion_score: float
-    closest_limit: str
+    closest_target: str
 
     @property
     def size_formatted(self) -> str:
@@ -48,15 +52,13 @@ class TorrentCandidate:
         return f"{self.size} B"
 
     @property
-    def limit_summary(self) -> str:
-        """Describe the limit that currently puts the torrent closest to removal."""
+    def target_summary(self) -> str:
+        """Describe the ranking target that puts the torrent highest."""
         progress = f"{self.closeness * 100:.1f}%"
-        if self.closest_limit == "ratio" and self.ratio_limit is not None:
-            return f"{progress} of its {self.ratio_limit:g} ratio limit"
-        if self.time_limit_seconds is not None:
-            days = self.time_limit_seconds / (24 * 60 * 60)
-            return f"{progress} of its {days:g}-day seeding limit"
-        return f"{progress} towards its share limit"
+        if self.closest_target == "ratio":
+            return f"{progress} of the {self.ratio_target:g} ratio ranking target"
+        days = self.time_target_seconds / SECONDS_PER_DAY
+        return f"{progress} of the {days:g}-day seeding ranking target"
 
     @property
     def is_uploading(self) -> bool:
@@ -74,20 +76,21 @@ class QbittorrentWebApi:
         password: str,
         *,
         ratio_progress_weight: float,
+        ratio_target: float,
+        seeding_days_target: float,
         timeout: float,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.password = password
         self.ratio_progress_weight = ratio_progress_weight
+        self.ratio_target = ratio_target
+        self.seeding_days_target = seeding_days_target
         self.timeout = timeout
 
     def ranked_seeders(self) -> list[TorrentCandidate]:
-        """Return eligible seeders ordered by proximity to a share limit."""
+        """Return eligible seeders after checking every configured tracker."""
         with self._authenticated_session() as session:
-            preferences = self._json_object(
-                self._request(session, "GET", "/api/v2/app/preferences"),
-            )
             torrents = self._json_list(
                 self._request(
                     session,
@@ -96,21 +99,78 @@ class QbittorrentWebApi:
                     params={"filter": "seeding"},
                 ),
             )
-        return rank_seeders(
-            torrents,
-            preferences,
-            ratio_progress_weight=self.ratio_progress_weight,
-        )
+            ranked = rank_seeders(
+                torrents,
+                ratio_progress_weight=self.ratio_progress_weight,
+                ratio_target=self.ratio_target,
+                seeding_days_target=self.seeding_days_target,
+            )
+            deadline = monotonic() + 120
+            eligible: list[TorrentCandidate] = []
+            for candidate in ranked:
+                remaining = deadline - monotonic()
+                if remaining <= 0:
+                    raise QbittorrentError("qBittorrent tracker check timed out")
+                trackers = self._json_list(
+                    self._request(
+                        session,
+                        "GET",
+                        "/api/v2/torrents/trackers",
+                        params={"hash": candidate.hash},
+                        timeout=min(self.timeout, remaining),
+                    ),
+                )
+                if not any(is_mam_tracker(item.get("url")) for item in trackers):
+                    eligible.append(candidate)
+            return eligible
 
-    def delete_with_files(self, torrent_hash: str) -> None:
-        """Delete one exact torrent and its downloaded content."""
+    def delete_with_files(
+        self,
+        torrent_hash: str,
+        *,
+        can_delete: Callable[[], bool],
+    ) -> bool:
+        """Refresh torrent eligibility and Home Assistant state before deletion."""
         with self._authenticated_session() as session:
+            torrents = self._json_list(
+                self._request(
+                    session,
+                    "GET",
+                    "/api/v2/torrents/info",
+                    params={"filter": "seeding", "hashes": torrent_hash},
+                ),
+            )
+            refreshed = rank_seeders(
+                torrents,
+                ratio_progress_weight=self.ratio_progress_weight,
+                ratio_target=self.ratio_target,
+                seeding_days_target=self.seeding_days_target,
+            )
+            candidate = next(
+                (item for item in refreshed if item.hash == torrent_hash),
+                None,
+            )
+            if candidate is None or candidate.is_uploading:
+                return False
+            trackers = self._json_list(
+                self._request(
+                    session,
+                    "GET",
+                    "/api/v2/torrents/trackers",
+                    params={"hash": torrent_hash},
+                ),
+            )
+            if any(is_mam_tracker(item.get("url")) for item in trackers):
+                return False
+            if not can_delete():
+                return False
             self._request(
                 session,
                 "POST",
                 "/api/v2/torrents/delete",
                 data={"hashes": torrent_hash, "deleteFiles": "true"},
             )
+        return True
 
     def restart_errored(self) -> list[str]:
         """Start torrents currently reported in qBittorrent's errored filter."""
@@ -172,23 +232,13 @@ class QbittorrentWebApi:
             response = session.request(
                 method,
                 f"{self.base_url}{path}",
-                timeout=self.timeout,
+                timeout=kwargs.pop("timeout", self.timeout),
                 **kwargs,
             )
             response.raise_for_status()
         except RequestException as error:
             raise QbittorrentError(f"qBittorrent API request failed: {error}") from error
         return response
-
-    @staticmethod
-    def _json_object(response: Response) -> dict[str, Any]:
-        try:
-            payload = response.json()
-        except ValueError as error:
-            raise QbittorrentError("qBittorrent returned invalid JSON") from error
-        if not isinstance(payload, dict):
-            raise QbittorrentError("qBittorrent preferences response was not an object")
-        return payload
 
     @staticmethod
     def _json_list(response: Response) -> list[dict[str, Any]]:
@@ -219,74 +269,30 @@ def _as_int(value: Any, default: int = 0) -> int:
         return default
 
 
-def _effective_limit(
-    torrent_limit: Any,
-    global_limit: Any,
-    *,
-    global_enabled: bool,
-) -> float | None:
-    """Resolve a per-torrent ratio limit against the global preference."""
-    limit = _as_float(torrent_limit, USE_GLOBAL_LIMIT)
-    if limit == USE_GLOBAL_LIMIT:
-        limit = _as_float(global_limit, -1) if global_enabled else -1
-    return limit if limit > 0 else None
-
-
-def _effective_time_limit_seconds(
-    torrent_limit: Any,
-    global_limit_minutes: Any,
-    *,
-    global_enabled: bool,
-) -> float | None:
-    """Resolve a per-torrent seeding limit to seconds."""
-    limit_minutes = _as_float(torrent_limit, USE_GLOBAL_LIMIT)
-    if limit_minutes == USE_GLOBAL_LIMIT:
-        if not global_enabled:
-            return None
-        limit_minutes = _as_float(global_limit_minutes, -1)
-    return limit_minutes * SECONDS_PER_MINUTE if limit_minutes > 0 else None
-
-
 def rank_seeders(
     torrents: list[dict[str, Any]],
-    preferences: dict[str, Any],
     *,
     ratio_progress_weight: float = 1.0,
+    ratio_target: float = 5.0,
+    seeding_days_target: float = 28.0,
 ) -> list[TorrentCandidate]:
-    """Rank seeders by weighted ratio progress or unweighted time progress."""
-    global_ratio_enabled = bool(preferences.get("max_ratio_enabled", True))
-    global_time_enabled = bool(preferences.get("max_seeding_time_enabled", True))
-    global_ratio_limit = preferences.get("max_ratio", -1)
-    global_time_limit = preferences.get("max_seeding_time", -1)
+    """Rank safe seeders by ratio and seeding time, independent of client limits."""
+    time_target_seconds = seeding_days_target * SECONDS_PER_DAY
 
     ranked: list[TorrentCandidate] = []
     for torrent in torrents:
         torrent_hash = str(torrent.get("hash", "")).lower()
         if not TORRENT_HASH_PATTERN.fullmatch(torrent_hash):
             continue
-
+        if str(torrent.get("category", "")).lower() == "shelfarr":
+            continue
         ratio = max(_as_float(torrent.get("ratio")), 0.0)
         seeding_seconds = max(_as_int(torrent.get("seeding_time")), 0)
-        ratio_limit = _effective_limit(
-            torrent.get("ratio_limit", USE_GLOBAL_LIMIT),
-            global_ratio_limit,
-            global_enabled=global_ratio_enabled,
-        )
-        time_limit_seconds = _effective_time_limit_seconds(
-            torrent.get("seeding_time_limit", USE_GLOBAL_LIMIT),
-            global_time_limit,
-            global_enabled=global_time_enabled,
-        )
-        if ratio_limit is None and time_limit_seconds is None:
-            continue
-
-        ratio_progress = ratio / ratio_limit if ratio_limit else 0.0
-        time_progress = (
-            seeding_seconds / time_limit_seconds if time_limit_seconds else 0.0
-        )
+        ratio_progress = ratio / ratio_target
+        time_progress = seeding_seconds / time_target_seconds
         weighted_ratio_progress = ratio_progress * ratio_progress_weight
         ratio_is_closer = weighted_ratio_progress >= time_progress
-        closest_limit = "ratio" if ratio_is_closer else "time"
+        closest_target = "ratio" if ratio_is_closer else "time"
         ranked.append(
             TorrentCandidate(
                 hash=torrent_hash,
@@ -296,13 +302,13 @@ def rank_seeders(
                     0,
                 ),
                 ratio=ratio,
-                ratio_limit=ratio_limit,
+                ratio_target=ratio_target,
                 upload_speed=max(_as_int(torrent.get("upspeed")), 0),
                 seeding_seconds=seeding_seconds,
-                time_limit_seconds=time_limit_seconds,
+                time_target_seconds=time_target_seconds,
                 closeness=ratio_progress if ratio_is_closer else time_progress,
                 deletion_score=max(weighted_ratio_progress, time_progress),
-                closest_limit=closest_limit,
+                closest_target=closest_target,
             ),
         )
 
@@ -314,12 +320,13 @@ def rank_seeders(
 
 
 class QbittorrentStorageCleanup(Hass):
-    """Prompt for one safe qBittorrent deletion when scratch storage is full."""
+    """Remove one safe seeder at a time when scratch storage is full."""
 
     def initialize(self) -> None:
         """Register storage and notification-action listeners."""
         self.storage_entity = str(self.args["storage_entity"])
         self.threshold_entity = str(self.args.get("threshold_entity", ""))
+        self.auto_mode_entity = str(self.args["auto_mode_entity"])
         self.default_threshold = float(self.args.get("threshold", 99.9))
         self.reset_below = float(
             self.args.get("reset_below", self.default_threshold),
@@ -341,6 +348,11 @@ class QbittorrentStorageCleanup(Hass):
                 float(self.args.get("ratio_progress_weight", 1.0)),
                 0.0,
             ),
+            ratio_target=max(float(self.args.get("ratio_target", 5.0)), 0.01),
+            seeding_days_target=max(
+                float(self.args.get("seeding_days_target", 28.0)),
+                0.01,
+            ),
             timeout=float(self.args.get("request_timeout", 15)),
         )
         self._threshold_active = False
@@ -349,6 +361,7 @@ class QbittorrentStorageCleanup(Hass):
         self.listen_state(self._storage_changed, self.storage_entity)
         if self.threshold_entity:
             self.listen_state(self._threshold_changed, self.threshold_entity)
+        self.listen_state(self._auto_mode_changed, self.auto_mode_entity)
         self.listen_event(
             self._notification_action,
             "mobile_app_notification_action",
@@ -431,7 +444,7 @@ class QbittorrentStorageCleanup(Hass):
         self._threshold_active = True
 
     def _offer_cleanup(self, usage: float) -> None:
-        """Find the nearest-limit torrent and send a confirmation notification."""
+        """Find the highest ranked torrent and request or perform deletion."""
         try:
             ranked = self.client.ranked_seeders()
         except QbittorrentError as error:
@@ -448,7 +461,7 @@ class QbittorrentStorageCleanup(Hass):
                 title="qBittorrent storage full",
                 message=(
                     f"Storage is at {usage:.1f}%, but there are no seeding torrents "
-                    "with an active ratio or time limit."
+                    "eligible for cleanup."
                 ),
                 icon="mdi:harddisk-alert",
             )
@@ -460,26 +473,25 @@ class QbittorrentStorageCleanup(Hass):
                 title="qBittorrent storage full",
                 message=(
                     f"Storage is at {usage:.1f}%, but every eligible seeding torrent "
-                    "is currently uploading. Nothing will be offered for deletion."
+                    "is currently uploading. Nothing will be deleted."
                 ),
                 icon="mdi:upload-network",
             )
             return
 
+        if self._auto_mode():
+            self._delete_candidate(candidate.hash, automatic=True)
+            return
+
         self._notify(
             title="Delete qBittorrent torrent?",
             message=(
-                f"Storage is at {usage:.1f}%. Delete the seeding torrent closest "
-                "to automatic removal?\n\n"
+                f"Storage is at {usage:.1f}%. Delete the highest ranked seeding "
+                "torrent?\n\n"
                 f"{candidate.name}\n"
                 f"Size: {candidate.size_formatted}\n"
-                f"Ratio: {candidate.ratio:.2f}"
-                + (
-                    f" / {candidate.ratio_limit:g}"
-                    if candidate.ratio_limit is not None
-                    else ""
-                )
-                + f"\nProgress: {candidate.limit_summary}"
+                f"Ratio: {candidate.ratio:.2f}\n"
+                f"Ranking: {candidate.target_summary}"
             ),
             icon="mdi:harddisk-remove",
             actions=[
@@ -490,13 +502,36 @@ class QbittorrentStorageCleanup(Hass):
             ],
         )
         self.log(
-            "Offered deletion of %s (%s, ratio %.2f, %.1f%% towards %s limit)",
+            "Offered deletion of %s (%s, ratio %.2f, %.1f%% towards %s target)",
             candidate.name,
             candidate.size_formatted,
             candidate.ratio,
             candidate.closeness * 100,
-            candidate.closest_limit,
+            candidate.closest_target,
         )
+
+    def _auto_mode(self) -> bool:
+        """Enable unattended deletion only for an explicit helper on state."""
+        return self.get_state(self.auto_mode_entity) == "on"
+
+    def _auto_mode_changed(
+        self,
+        entity: str,
+        attribute: str,
+        old: Any,
+        new: Any,
+        **kwargs: Any,
+    ) -> None:
+        """Apply a mode change to an existing full-storage condition."""
+        del entity, attribute, kwargs
+        if old == new or self._post_delete_check_pending:
+            return
+        usage = self._usage(self.get_state(self.storage_entity))
+        if usage is not None and usage >= self._current_threshold():
+            self._offer_cleanup(usage)
+        elif usage is not None:
+            self._threshold_active = False
+            self._clear_notification()
 
     def _notification_action(
         self,
@@ -515,17 +550,17 @@ class QbittorrentStorageCleanup(Hass):
             self.error("Ignored malformed qBittorrent deletion action")
             return
 
+        self._delete_candidate(torrent_hash, automatic=False)
+
+    def _delete_candidate(self, torrent_hash: str, *, automatic: bool) -> None:
+        """Recheck storage, mode and eligibility before deleting one torrent."""
+        if not self._ready_to_delete(automatic=automatic):
+            return
+
         try:
-            candidate = next(
-                (
-                    item
-                    for item in self.client.ranked_seeders()
-                    if item.hash == torrent_hash
-                ),
-                None,
-            )
+            ranked = self.client.ranked_seeders()
         except QbittorrentError as error:
-            self.error("Unable to delete confirmed qBittorrent torrent: %s", error)
+            self.error("Unable to delete qBittorrent torrent: %s", error)
             self._notify(
                 title="Torrent was not deleted",
                 message=f"qBittorrent reported: {error}",
@@ -533,9 +568,14 @@ class QbittorrentStorageCleanup(Hass):
             )
             return
 
+        if automatic:
+            candidate = next((item for item in ranked if not item.is_uploading), None)
+        else:
+            candidate = next((item for item in ranked if item.hash == torrent_hash), None)
+
         if candidate is None:
-            error = "the confirmed torrent is no longer in the seeding list"
-            self.error("Unable to delete confirmed qBittorrent torrent: %s", error)
+            error = "the selected torrent is no longer in the eligible seeding list"
+            self.error("Unable to delete qBittorrent torrent: %s", error)
             self._notify(
                 title="Torrent was not deleted",
                 message=f"qBittorrent reported: {error}",
@@ -551,23 +591,29 @@ class QbittorrentStorageCleanup(Hass):
             )
             self._notify(
                 title="Torrent was not deleted",
-                message=(
-                    f"{candidate.name} started uploading after the notification "
-                    "was sent, so it has been left alone."
-                ),
+                message=(f"{candidate.name} is uploading, so it has been left alone."),
                 icon="mdi:upload-network",
             )
             return
 
         try:
-            self.client.delete_with_files(torrent_hash)
+            deleted = self.client.delete_with_files(
+                candidate.hash,
+                can_delete=lambda: self._ready_to_delete(automatic=automatic),
+            )
         except QbittorrentError as error:
-            self.error("Unable to delete confirmed qBittorrent torrent: %s", error)
+            self.error("Unable to delete qBittorrent torrent: %s", error)
             self._notify(
                 title="Torrent was not deleted",
                 message=f"qBittorrent reported: {error}",
                 icon="mdi:delete-alert",
             )
+            return
+
+        if not deleted:
+            if self._ready_to_delete(automatic=automatic):
+                self._post_delete_check_pending = True
+                self.run_in(self._retry_cleanup, 5)
             return
 
         self._notify(
@@ -577,10 +623,41 @@ class QbittorrentStorageCleanup(Hass):
             persistent=False,
             sticky=False,
         )
-        self.log("Deleted confirmed torrent %s (%s)", candidate.name, torrent_hash)
+        self.log(
+            "Deleted %s torrent %s (%s)",
+            "automatic" if automatic else "confirmed",
+            candidate.name,
+            candidate.hash,
+        )
         self._threshold_active = False
         self._post_delete_check_pending = True
         self.run_in(self._post_delete_check, self.post_delete_check_delay)
+
+    def _retry_cleanup(self, _kwargs: dict[str, Any]) -> None:
+        """Offer a fresh candidate when a selected torrent becomes ineligible."""
+        self._post_delete_check_pending = False
+        usage = self._usage(self.get_state(self.storage_entity))
+        if usage is not None and usage >= self._current_threshold():
+            self._offer_cleanup(usage)
+        elif usage is not None:
+            self._threshold_active = False
+            self._clear_notification()
+
+    def _ready_to_delete(self, *, automatic: bool) -> bool:
+        """Reject stale, below-threshold or disabled automatic cleanup."""
+        if self._post_delete_check_pending:
+            self.log("Ignored qBittorrent deletion while waiting for storage refresh")
+            return False
+        usage = self._usage(self.get_state(self.storage_entity))
+        if usage is None or usage < self._current_threshold():
+            self.log("Ignored qBittorrent deletion because storage is below threshold")
+            self._clear_notification()
+            self._threshold_active = False
+            return False
+        if automatic and not self._auto_mode():
+            self.log("Ignored automatic qBittorrent deletion because auto mode is off")
+            return False
+        return True
 
     def _post_delete_check(self, _kwargs: dict[str, Any]) -> None:
         """Restart errored torrents or offer another deletion after refresh."""

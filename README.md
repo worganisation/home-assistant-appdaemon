@@ -9,17 +9,22 @@ account sensors, conservative download budget and individual torrent diagnostics
 
 `apps/qbittorrent/storage_cleanup.py` watches the qBittorrent scratch-storage
 sensor. When usage crosses the threshold configured in Home Assistant, it asks
-qBittorrent for the completed torrents currently seeding and ranks them by the nearer
-of their effective ratio and seeding time limits. The notification identifies the
-nearest candidate by name, size, and ratio and includes an action to delete that exact
-torrent and its content.
-Torrents currently transferring upload data are skipped, and this is checked again
-when the notification action is pressed.
+qBittorrent for completed torrents currently seeding and ranks them against a ratio
+target of 5 and seeding time target of 28 days. These are ranking benchmarks, not
+qBittorrent deletion limits. Shelfarr and MyAnonamouse torrents are excluded.
+Torrents currently uploading are skipped, and the app checks eligibility and the
+storage threshold again immediately before deletion.
 
-After a confirmed deletion, the app waits 90 seconds for the storage sensor to
-refresh. It then restarts errored torrents and offers the next eligible torrent if
-usage is still at or above the configured threshold, with a separate confirmation
-required each time.
+`input_boolean.qbittorrent_storage_cleanup_auto_mode` controls how the top
+eligible torrent is handled. When off or unavailable, the app sends an approval
+notification with an action to delete that exact torrent and its content. When on,
+the app deletes it without an approval notification and sends the deletion
+confirmation directly. Mode changes take effect without an AppDaemon reload.
+
+After a deletion, the app waits 90 seconds for the storage sensor to refresh. It
+then restarts errored torrents and considers the next eligible torrent if usage
+remains at or above the configured threshold. Auto mode handles each further
+deletion the same way; manual mode requires approval each time.
 
 The cleanup threshold is read from
 `input_number.qbittorrent_storage_cleanup_threshold` and changes take effect without
@@ -29,13 +34,13 @@ usage sends a fresh cleanup prompt, even if cleanup is already active. Changes m
 during the post-deletion wait take effect when that pending storage check runs.
 
 Ratio progress has a configurable `1.25` weighting when candidates are ordered. A
-torrent at ratio `4 / 5` therefore ranks alongside one at its full seeding-time limit,
-while notification progress remains the unweighted value of the actual limit.
+torrent at ratio 4 therefore ranks alongside one at 28 days of seeding, while
+notification progress shows the unweighted value of the selected ranking target.
 
-The app re-fetches the seeding list before acting on the notification, so it never
+The app re-fetches the seeding list before acting on a notification, so it never
 substitutes a newly ranked torrent for the one that was confirmed. Both qBittorrent
-v1 and v2 info hashes are accepted. The global limits are read from qBittorrent at
-runtime; per-torrent overrides and disabled limits are respected.
+v1 and v2 info hashes are accepted. Ranking works with unlimited qBittorrent
+share limits.
 
 Add these values to `/homeassistant/secrets.yaml`, which is shared with AppDaemon:
 
