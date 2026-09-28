@@ -42,10 +42,13 @@ qbittorrent_storage_cleanup:
   class: QbittorrentStorageCleanup
   storage_entity: sensor.storage_cc_scratch_qbt_disk_used_percentage
   threshold_entity: input_number.qbittorrent_storage_cleanup_threshold
+  auto_mode_entity: input_boolean.qbittorrent_storage_cleanup_auto_mode
   threshold: 99.9
   reset_below: 98.0
   post_delete_check_delay: 90
   ratio_progress_weight: 1.25  # Makes ratio 4/5 tie with time 28/28 days.
+  ratio_target: 5
+  seeding_days_target: 28
   request_timeout: 15
 
   qbittorrent_url: !secret qbittorrent_url
