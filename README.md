@@ -120,11 +120,18 @@ If AppDaemon runs in a venv or container, install it there instead:
 pip install tinytuya paho-mqtt
 ```
 
-### MQTT Climate Entity
+### MQTT Entities
 
 The app publishes Home Assistant MQTT discovery for `climate.pro_breeze_ac` and uses
 MQTT command topics to translate native climate service calls back to Tuya DPS writes.
 MQTT discovery must be enabled in Home Assistant.
+
+The same MQTT device also exposes `switch.pro_breeze_ac_polling_enabled`. Turn it on
+when the AC is plugged in and off when it is unplugged. Off cancels TinyTuya polling,
+closes the device socket, ignores climate commands, and marks the climate entity
+unavailable. The switch command is retained by the MQTT broker, so the setting
+survives AppDaemon restarts. Polling defaults to off until a retained on command or
+a new switch command is received.
 
 Configure an MQTT user for AppDaemon and provide these secrets:
 
