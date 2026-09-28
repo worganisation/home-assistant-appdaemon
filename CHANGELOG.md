@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.34.0 (2026-09-28)
+
+### Chores
+
+- 🔄 synced file(s) with worganisation/github-config-files
+  ([#324](https://github.com/worganisation/home-assistant-appdaemon/pull/324),
+  [`09e074a`](https://github.com/worganisation/home-assistant-appdaemon/commit/09e074ae84d2f512658be6eafa575c8edb21ca9f))
+
+### Features
+
+- **qbittorrent**: Add storage cleanup auto mode
+  ([#325](https://github.com/worganisation/home-assistant-appdaemon/pull/325),
+  [`5cba08e`](https://github.com/worganisation/home-assistant-appdaemon/commit/5cba08e94dfe838c0d109e83762fd02650592b6d))
+
+
 ## v0.33.1 (2026-09-24)
 
 ### Bug Fixes
