@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.35.0 (2026-09-29)
+
+### Features
+
+- **pro-breeze**: Add MQTT polling switch
+  ([#326](https://github.com/worganisation/home-assistant-appdaemon/pull/326),
+  [`be2aa44`](https://github.com/worganisation/home-assistant-appdaemon/commit/be2aa44b8f40cc4139649b8a63c4d07316c2191e))
+
+
 ## v0.34.0 (2026-09-28)
 
 ### Chores
