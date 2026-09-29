@@ -55,6 +55,7 @@ class ProBreezeAC(hass.Hass):
         self.mqtt_client = None
         self._poll_timer = None
         self._stopping = False
+        self._polling_enabled = False
         self._last_raw_status_json: str | None = None
         self._consecutive_failures = 0
         self._mqtt_reported_available = False
@@ -79,9 +80,8 @@ class ProBreezeAC(hass.Hass):
         self.dp_swing = self._get_dp("dp_swing")
         self.dp_sleep = self._get_dp("dp_sleep")
 
+        self._write_raw_sensor("disabled", {})
         self._configure_mqtt()
-
-        self._schedule_poll(delay=0)
 
         self.log(
             "Initialized Pro Breeze AC with %s seconds between polls "
@@ -103,6 +103,10 @@ class ProBreezeAC(hass.Hass):
                 if self.mqtt_client is not None:
                     try:
                         self._publish_mqtt_availability(is_available=False)
+                        self._publish_mqtt(
+                            self._mqtt_topic("app/availability"),
+                            "offline",
+                        )
                     finally:
                         try:
                             self.mqtt_client.disconnect()
@@ -115,12 +119,12 @@ class ProBreezeAC(hass.Hass):
         """Poll the AC and sync mapped DPS values into Home Assistant."""
         del kwargs
         self._poll_timer = None
-        if self._stopping:
+        if self._stopping or not self._polling_enabled:
             return
 
         try:
             status = self._read_status()
-            if status is None or self._stopping:
+            if status is None or self._stopping or not self._polling_enabled:
                 return
 
             dps = self._extract_dps(status)
@@ -133,7 +137,7 @@ class ProBreezeAC(hass.Hass):
 
     def _schedule_poll(self, delay: float | None = None) -> None:
         """Schedule one poll, replacing any pending poll timer."""
-        if self._stopping:
+        if self._stopping or not self._polling_enabled:
             return
 
         if self._poll_timer is not None:
@@ -153,6 +157,22 @@ class ProBreezeAC(hass.Hass):
         payload = str(kwargs["payload"]).strip()
         command = self._mqtt_command_for_topic(topic)
 
+        if command == "polling_enabled":
+            self._handle_polling_command(payload)
+            return
+
+        if not self._polling_enabled:
+            return
+
+        self._handle_climate_command(command, payload)
+
+    def _handle_polling_command(self, payload: str) -> None:
+        if payload not in {"ON", "OFF"}:
+            self.error("Unsupported MQTT polling command: %r", payload)
+            return
+        self._set_polling_enabled(enabled=payload == "ON")
+
+    def _handle_climate_command(self, command: str | None, payload: str) -> None:
         self.log("MQTT climate command received: %s => %r", command, payload)
 
         if command == "mode":
@@ -175,7 +195,7 @@ class ProBreezeAC(hass.Hass):
             self._handle_mqtt_preset_mode_command(payload)
             return
 
-        self.error("Unknown MQTT climate command topic: %s", topic)
+        self.error("Unknown MQTT climate command: %s", command)
 
     def _get_dp(self, key: str) -> str | None:
         value = self.args.get(key)
@@ -202,6 +222,7 @@ class ProBreezeAC(hass.Hass):
             "fan_mode": f"{self.mqtt_base_topic}/fan_mode/set",
             "swing_mode": f"{self.mqtt_base_topic}/swing_mode/set",
             "preset_mode": f"{self.mqtt_base_topic}/preset_mode/set",
+            "polling_enabled": f"{self.mqtt_base_topic}/polling_enabled/set",
         }
 
         if not self.mqtt_host:
@@ -222,7 +243,7 @@ class ProBreezeAC(hass.Hass):
         self.mqtt_client.on_message = self._handle_mqtt_message
         self.mqtt_client.on_disconnect = self._handle_mqtt_disconnect
         self.mqtt_client.will_set(
-            self._mqtt_topic("availability"),
+            self._mqtt_topic("app/availability"),
             "offline",
             qos=self.mqtt_qos,
             retain=True,
@@ -283,6 +304,11 @@ class ProBreezeAC(hass.Hass):
 
         self._publish_mqtt_discovery()
         self._publish_mqtt_availability(is_available=self._mqtt_reported_available)
+        self._publish_mqtt(
+            self._mqtt_topic("polling_enabled/state"),
+            "ON" if self._polling_enabled else "OFF",
+        )
+        self._publish_mqtt(self._mqtt_topic("app/availability"), "online")
 
     def _handle_mqtt_disconnect(
         self,
@@ -349,7 +375,11 @@ class ProBreezeAC(hass.Hass):
             "name": self.mqtt_name,
             "unique_id": self.mqtt_unique_id,
             "object_id": self.mqtt_object_id,
-            "availability_topic": self._mqtt_topic("availability"),
+            "availability": [
+                {"topic": self._mqtt_topic(topic)}
+                for topic in ("app/availability", "availability")
+            ],
+            "availability_mode": "all",
             "payload_available": "online",
             "payload_not_available": "offline",
             "mode_command_topic": self._mqtt_command_topics["mode"],
@@ -384,6 +414,50 @@ class ProBreezeAC(hass.Hass):
             },
         }
         self._publish_mqtt(config_topic, config)
+
+        switch_config = {
+            "name": "Polling enabled",
+            "unique_id": f"{self.mqtt_unique_id}_polling_enabled",
+            "object_id": f"{self.mqtt_object_id}_polling_enabled",
+            "command_topic": self._mqtt_command_topics["polling_enabled"],
+            "state_topic": self._mqtt_topic("polling_enabled/state"),
+            "availability_topic": self._mqtt_topic("app/availability"),
+            "payload_on": "ON",
+            "payload_off": "OFF",
+            "retain": True,
+            "device": config["device"],
+            "origin": config["origin"],
+        }
+        self._publish_mqtt(
+            f"{self.mqtt_discovery_prefix}/switch/"
+            f"{self.mqtt_object_id}_polling_enabled/config",
+            switch_config,
+        )
+
+    def _set_polling_enabled(self, *, enabled: bool) -> None:
+        """Apply the retained MQTT polling preference."""
+        if self._polling_enabled == enabled:
+            return
+
+        self._polling_enabled = enabled
+        self._publish_mqtt(
+            self._mqtt_topic("polling_enabled/state"),
+            "ON" if enabled else "OFF",
+        )
+        if enabled:
+            self.log("Pro Breeze AC polling enabled")
+            self._schedule_poll(delay=0)
+            return
+
+        self.log("Pro Breeze AC polling disabled")
+        if self._poll_timer is not None:
+            self.cancel_timer(self._poll_timer)
+            self._poll_timer = None
+        self._reset_device()
+        self._consecutive_failures = 0
+        self._mqtt_reported_available = False
+        self._publish_mqtt_availability(is_available=False)
+        self._write_raw_sensor("disabled", {})
 
     def _publish_mqtt_availability(self, *, is_available: bool) -> None:
         self._publish_mqtt(
@@ -566,8 +640,13 @@ class ProBreezeAC(hass.Hass):
         try:
             status = self._get_device().status()
         except Exception as err:
+            if not self._polling_enabled:
+                return None
             self.error("TinyTuya status failed: %s", err)
             self._handle_tuya_failure(err)
+            return None
+
+        if not self._polling_enabled:
             return None
 
         if not isinstance(status, dict):
@@ -679,6 +758,9 @@ class ProBreezeAC(hass.Hass):
         self._publish_mqtt_availability(is_available=False)
 
     def _command_dp(self, dp: str, value: Any, label: str) -> None:
+        if not self._polling_enabled:
+            return
+
         try:
             result = self._get_device().set_value(dp, value)
         except Exception as err:
