@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.35.1 (2026-10-06)
+
+### Bug Fixes
+
+- **habit**: Count down end-of-day notifications to midnight
+  ([#329](https://github.com/worganisation/home-assistant-appdaemon/pull/329),
+  [`4ab2add`](https://github.com/worganisation/home-assistant-appdaemon/commit/4ab2addc893edd074506d874ac3682a88a5d8e9c))
+
+### Build System
+
+- **deps**: Bump pyjwt from 2.13.0 to 2.15.0 in the uv-security-dependencies group across 1
+  directory ([#327](https://github.com/worganisation/home-assistant-appdaemon/pull/327),
+  [`30f5526`](https://github.com/worganisation/home-assistant-appdaemon/commit/30f552658bb94e3883846f552d2d11b71620eacf))
+
+### Chores
+
+- **deps**: Update dependency gitpython to v3.1.62 [security]
+  ([#328](https://github.com/worganisation/home-assistant-appdaemon/pull/328),
+  [`d776350`](https://github.com/worganisation/home-assistant-appdaemon/commit/d776350d3eef37add7734bc584ba5c6aa683a8e1))
+
+
 ## v0.35.0 (2026-09-29)
 
 ### Features
