@@ -1975,7 +1975,13 @@ class HabitTracker(hass.Hass):
             "to keep your streak."
         )
         self.log("Sending end-of-day habit reminder for %s slot %s", user, slot)
-        self._notify_habit(user, slot, config, message)
+        now = self._aware_now()
+        midnight = datetime.combine(
+            now.date() + timedelta(days=1),
+            time(),
+            tzinfo=now.tzinfo,
+        )
+        self._notify_habit(user, slot, config, message, expires_at=midnight)
 
     def _notify_habit(
         self,
@@ -1983,6 +1989,8 @@ class HabitTracker(hass.Hass):
         slot: int,
         config: HabitConfig,
         message: str,
+        *,
+        expires_at: datetime | None = None,
     ) -> None:
         action = (
             f"MARK_HABIT_AS_COMPLETE__{user.upper()}__{slot}"
@@ -1997,11 +2005,24 @@ class HabitTracker(hass.Hass):
         ).streak
         title = f"{config.name} · {streak}-day streak"
         user_config = self._user_config(user)
+        expiry_variables: dict[str, int | bool] = {}
+        if expires_at is not None:
+            expiry_variables = {
+                "timeout": max(
+                    1,
+                    int(expires_at.timestamp()) - int(self._aware_now().timestamp()),
+                ),
+                "chronometer": True,
+                "when": int(expires_at.timestamp()),
+                "when_relative": False,
+            }
+
         try:
             self.call_service(
                 "script/turn_on",
                 entity_id=user_config["notify_script"],
                 variables={
+                    **expiry_variables,
                     "title": title,
                     "message": message,
                     "notification_id": f"{user}_habit_{slot}_reminder",
