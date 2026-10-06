@@ -2005,7 +2005,7 @@ class HabitTracker(hass.Hass):
         ).streak
         title = f"{config.name} · {streak}-day streak"
         user_config = self._user_config(user)
-        expiry_variables: dict[str, Any] = {}
+        expiry_variables: dict[str, int | bool] = {}
         if expires_at is not None:
             expiry_variables = {
                 "timeout": max(

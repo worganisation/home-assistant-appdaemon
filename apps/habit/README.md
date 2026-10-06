@@ -184,14 +184,7 @@ events remove the sibling notification where the mobile app exposes them.
 Notifications are sent through the user's configured `script.notify_*` script. Their
 action button either marks a binary habit complete or increments a countable habit.
 
-Each habit can also opt in to an independent end-of-day reminder with
-`switch.<user>_habit_<slot>_end_of_day_reminder`. At 23:55 local time, the app sends
-one final notification when that habit is still incomplete. The notification shows
-an Android countdown to local midnight and automatically dismisses at midnight.
-Late reminders use only the remaining seconds until midnight. This timer is derived
-from the fixed daily time rather than stored in `pending_reminders`, and it neither
-consumes nor changes the scheduled/repeating reminder chain. Enabling it after 23:55
-sends the check immediately if the habit is still incomplete.
+Each habit can also opt in to an independent end-of-day reminder with `switch.<user>_habit_<slot>_end_of_day_reminder`. At 23:55 local time, the app sends one final notification when that habit is still incomplete. The notification shows an Android countdown to local midnight and automatically dismisses at midnight. Late reminders use only the remaining seconds until midnight. This timer is derived from the fixed daily time rather than stored in `pending_reminders`, and it neither consumes nor changes the scheduled/repeating reminder chain. Enabling it after 23:55 sends the check immediately if the habit is still incomplete.
 
 At local midnight, habit values reset while historical completions remain available
 for streak calculations. Pending habit reminder chains are cleared and incomplete
