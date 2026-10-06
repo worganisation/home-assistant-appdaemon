@@ -186,7 +186,9 @@ action button either marks a binary habit complete or increments a countable hab
 
 Each habit can also opt in to an independent end-of-day reminder with
 `switch.<user>_habit_<slot>_end_of_day_reminder`. At 23:55 local time, the app sends
-one final notification when that habit is still incomplete. This timer is derived
+one final notification when that habit is still incomplete. The notification shows
+an Android countdown to local midnight and automatically dismisses at midnight.
+Late reminders use only the remaining seconds until midnight. This timer is derived
 from the fixed daily time rather than stored in `pending_reminders`, and it neither
 consumes nor changes the scheduled/repeating reminder chain. Enabling it after 23:55
 sends the check immediately if the habit is still incomplete.
