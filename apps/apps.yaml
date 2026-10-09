@@ -35,6 +35,20 @@ cursor_usage_monitor:
   mqtt_discovery_prefix: homeassistant
   mqtt_base_topic: appdaemon/cursor_usage
 
+# Codex Usage
+
+codex_usage_monitor:
+  module: codex_usage.monitor
+  class: CodexUsageMonitor
+  poll_interval_seconds: 300
+  storage_path: /data/codex
+  control_socket: /share/codex-monitor/control.sock
+  binary_path: /data/codex/runtime/bin/codex
+  mqtt_host: !secret appdaemon_mqtt_host
+  mqtt_port: 1883
+  mqtt_username: !secret appdaemon_mqtt_username
+  mqtt_password: !secret appdaemon_mqtt_password
+
 # qBittorrent Storage Cleanup
 
 qbittorrent_storage_cleanup:
