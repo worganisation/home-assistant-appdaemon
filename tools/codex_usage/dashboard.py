@@ -82,6 +82,9 @@ def sections(payload: dict[str, object]) -> list[dict[str, object]]:
                         "name": sensor.name,
                         "primary_info": "state",
                         "secondary_info": "name",
+                        "tap_action": {"action": "more-info"},
+                        "hold_action": {"action": "more-info"},
+                        "double_tap_action": {"action": "more-info"},
                     }
                     for sensor in details
                 ],

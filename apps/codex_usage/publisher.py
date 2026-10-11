@@ -115,6 +115,9 @@ class Publisher:
 
         self.connected = True
         for name, state in self.accounts.items():
+            for group in state.successes:
+                self._sync_discovery(name, group)
+
             for reading in state.readings.values():
                 self._reading(name, reading)
         self.refresh()
@@ -123,22 +126,12 @@ class Publisher:
     def success(self, name: str, group: str, readings: list[Reading]) -> None:
         """Replace a successful group and retire windows absent from its snapshot."""
         state = self.accounts[name]
-        manifest = self.root / f"discovery-{name}-{group}.json"
-        previous = (
-            TypeAdapter(list[str]).validate_json(manifest.read_text())
-            if manifest.exists()
-            else []
-        )
         keys = {reading.key for reading in readings}
-        for key in set(previous) - keys:
-            self._publish(self._discovery_topic(name, key), "")
-            self._publish(self.topic(f"{name}/{key}"), "")
-            state.readings.pop(key, None)
-
-        if self.connected:
-            temporary = manifest.with_suffix(".tmp")
-            temporary.write_text(json.dumps(sorted(keys)))
-            temporary.replace(manifest)
+        previous = {
+            key for key, reading in state.readings.items() if reading.group == group
+        }
+        for key in previous - keys:
+            del state.readings[key]
 
         state.successes[group] = time.monotonic()
         state.failures.pop(group, None)
@@ -146,8 +139,36 @@ class Publisher:
         state.authentication_failed = False
         for reading in readings:
             state.readings[reading.key] = reading
+
+        self._sync_discovery(name, group)
+        for reading in readings:
             self._reading(name, reading)
+
         self.refresh()
+
+    def _sync_discovery(self, name: str, group: str) -> None:
+        """Retire broker discoveries absent from the latest successful snapshot."""
+        if not self.connected:
+            return
+
+        manifest = self.root / f"discovery-{name}-{group}.json"
+        previous = (
+            TypeAdapter(list[str]).validate_json(manifest.read_text())
+            if manifest.exists()
+            else []
+        )
+        keys = {
+            key
+            for key, reading in self.accounts[name].readings.items()
+            if reading.group == group
+        }
+        for key in set(previous) - keys:
+            self._publish(self._discovery_topic(name, key), "")
+            self._publish(self.topic(f"{name}/{key}"), "")
+
+        temporary = manifest.with_suffix(".tmp")
+        temporary.write_text(json.dumps(sorted(keys)))
+        temporary.replace(manifest)
 
     def failure(self, name: str, group: str, *, authentication: bool = False) -> None:
         """Preserve good values while tracking endpoint-specific health."""
@@ -225,9 +246,9 @@ class Publisher:
         discovery: dict[str, object] = {
             "name": reading.name,
             "unique_id": f"appdaemon_{entity}",
-            "object_id": entity,
+            "default_entity_id": f"sensor.{entity}",
             "state_topic": state_topic,
-            "value_template": "{{ value_json.value if value_json.value is not none else '' }}",
+            "value_template": "{{ value_json.value }}",
             "json_attributes_topic": state_topic,
             "json_attributes_template": "{{ value_json.attributes | tojson }}",
             "availability": availability,
