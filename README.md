@@ -1,5 +1,9 @@
 # Home Assistant: AppDaemon
 
+## Codex Usage
+
+The [Codex usage monitor](tools/codex_usage/README.md) tracks multiple ChatGPT accounts through the Codex app-server and publishes MQTT sensors for quota windows, resets, credits and token activity. Use `just codex-login <profile>` locally to enroll an account through Home Assistant's existing SSH connection.
+
 ## MAM account and seeding monitor
 
 [Configuration, data coverage and validation](apps/mam/README.md) for the MAM
