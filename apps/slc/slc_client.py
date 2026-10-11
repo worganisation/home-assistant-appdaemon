@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from datetime import date, datetime
 from html import unescape
+from http import HTTPStatus
 from urllib.parse import urljoin
 from zoneinfo import ZoneInfo
 
@@ -26,6 +27,10 @@ LOGIN_HOST = "https://logon.slc.co.uk"
 
 class SlcError(Exception):
     """Raised when authentication or parsing fails."""
+
+
+class SlcTemporaryError(SlcError):
+    """Raised when the portal reports temporary service unavailability."""
 
 
 @dataclass(frozen=True)
@@ -299,6 +304,29 @@ def parse_overview(html: str) -> LoanSummary:
     return summary
 
 
+def _check_response(response: httpx2.Response) -> None:
+    """Classify temporary outages before authentication and HTML parsing.
+
+    Every portal response is checked, including redirects and form submissions.
+    Other HTTP errors remain actionable failures.
+    """
+    if (
+        response.status_code in {HTTPStatus.REQUEST_TIMEOUT, HTTPStatus.TOO_MANY_REQUESTS}
+        or response.status_code >= HTTPStatus.INTERNAL_SERVER_ERROR
+    ):
+        raise SlcTemporaryError(
+            f"SLC service temporarily unavailable (HTTP {response.status_code})",
+        )
+    if response.status_code >= HTTPStatus.BAD_REQUEST:
+        response.raise_for_status()
+
+    response.read()
+    if (_page_title(response.text) or "").casefold() == (
+        "services unavailable - student loans company"
+    ):
+        raise SlcTemporaryError("Services unavailable - Student Loans Company")
+
+
 def _client() -> httpx2.Client:
     """Create an HTTP client configured for the SLC portal.
 
@@ -314,6 +342,7 @@ def _client() -> httpx2.Client:
         },
         follow_redirects=True,
         timeout=45.0,
+        event_hooks={"response": [_check_response]},
     )
 
 
@@ -526,8 +555,9 @@ def fetch_loan_summary(
         Parsed overview values including balance and repayment fields.
 
     Raises:
+        SlcTemporaryError: If the portal reports a temporary outage.
         SlcError: If login, secret answer, or overview parsing fails.
-        httpx2.HTTPError: If an HTTP transport error occurs.
+        httpx2.HTTPError: If an HTTP request fails.
     """
     with _client() as client:
         login_page = _open_login_page(client)
