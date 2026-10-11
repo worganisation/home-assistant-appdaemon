@@ -94,6 +94,8 @@ appdaemon_mqtt_password: <mqtt password>
 
 Optional diagnostic entity: `sensor.slc_last_poll`.
 
+Failed polls preserve the last successful sensor readings and their MQTT availability. Transport errors, HTTP 408/429/5xx responses, and the SLC “Services unavailable” page stay silent. Authentication failures, unexpected page layouts, and other HTTP errors send a one-shot notification that clears after a successful poll. The diagnostic entity records the failed attempt and its error; `sensor.slc_last_successful_scrape` indicates when the readings were last refreshed.
+
 Default poll interval is 6 hours. MQTT discovery must be enabled in Home Assistant.
 
 ## Pro Breeze Portable AC

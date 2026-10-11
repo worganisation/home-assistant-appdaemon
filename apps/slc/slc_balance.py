@@ -11,10 +11,9 @@ import appdaemon.plugins.hass.hassapi as hass
 import httpx2
 import paho.mqtt.client as mqtt
 from paho.mqtt.enums import CallbackAPIVersion
-from slc_client import LoanSummary, SlcError, fetch_loan_summary
+from slc_client import LoanSummary, SlcError, SlcTemporaryError, fetch_loan_summary
 
 DEFAULT_POLL_INTERVAL: Final[int] = 6 * 60 * 60
-DEFAULT_FAILURE_THRESHOLD: Final[int] = 2
 DEFAULT_NOTIFY_SCRIPT: Final[str] = "script.notify_will"
 DEFAULT_NOTIFICATION_ID: Final[str] = "slc_balance_poll_failed"
 MAX_NOTIFICATION_ERROR_CHARS: Final[int] = 240
@@ -118,8 +117,9 @@ class SlcBalance(hass.Hass):
     """Publish Student Loans Company overview values as MQTT sensors.
 
     The app authenticates to the SLC portal on a schedule, publishes retained
-    MQTT discovery/state for eight sensors under one device, and notifies via
-    ``script.notify_will`` after repeated poll failures.
+    MQTT discovery/state for eight sensors under one device, and preserves
+    the last successful readings when a poll fails. Authentication and page
+    parsing failures notify via the configured script; temporary outages do not.
     """
 
     mqtt_client: Any | None
@@ -135,13 +135,10 @@ class SlcBalance(hass.Hass):
 
         Required ``apps.yaml`` args are ``username``, ``password``, and
         ``secret_answer``. Optional args configure poll interval, MQTT topics,
-        failure threshold, and notification targets.
+        the diagnostic sensor, and notification targets.
         """
         self.mqtt_client = None
-        self._consecutive_failures = 0
-        self._mqtt_reported_available = False
         self._failure_notified = False
-        self._last_failure_message: str | None = None
 
         for required in ("username", "password", "secret_answer"):
             if required not in self.args:
@@ -152,15 +149,6 @@ class SlcBalance(hass.Hass):
         self.password = str(self.args["password"])
         self.secret_answer = str(self.args["secret_answer"])
         self.poll_interval = int(self.args.get("poll_interval", DEFAULT_POLL_INTERVAL))
-        self.availability_failure_threshold = max(
-            1,
-            int(
-                self.args.get(
-                    "availability_failure_threshold",
-                    DEFAULT_FAILURE_THRESHOLD,
-                ),
-            ),
-        )
         self.raw_sensor = self.args.get("raw_sensor")
         self.notify_script = str(self.args.get("notify_script", DEFAULT_NOTIFY_SCRIPT))
         self.notification_id = str(
@@ -170,10 +158,8 @@ class SlcBalance(hass.Hass):
         self._configure_mqtt()
         self.run_every(self.poll_slc, "immediate", self.poll_interval)
         self.log(
-            "Initialized SLC balance polling every %s seconds "
-            "(availability offline after %s consecutive failures)",
+            "Initialized SLC balance polling every %s seconds",
             self.poll_interval,
-            self.availability_failure_threshold,
         )
 
     def terminate(self) -> None:
@@ -188,9 +174,10 @@ class SlcBalance(hass.Hass):
     def poll_slc(self, kwargs: dict[str, Any] | None = None) -> None:
         """Fetch the SLC overview and publish MQTT sensor states.
 
-        On success, sensor states and availability are updated and any prior
-        failure notification is cleared. On failure, diagnostics are updated
-        and consecutive-failure availability/notification logic runs.
+        Successful polls update sensor states and availability. Failed polls
+        update diagnostics while preserving retained readings and availability.
+        Temporary outages stay silent; authentication and page parsing failures
+        send a one-shot notification, cleared by the next successful poll.
 
         Args:
             kwargs: Unused AppDaemon scheduler kwargs.
@@ -203,15 +190,19 @@ class SlcBalance(hass.Hass):
                 password=self.password,
                 secret_answer=self.secret_answer,
             )
+        except (SlcTemporaryError, httpx2.TransportError) as err:
+            self.log("Temporary SLC poll failure: %s", err, level="WARNING")
+            self._write_raw_sensor("error", error=str(err))
+            return
         except (SlcError, httpx2.HTTPError) as err:
             self.error("SLC poll failed: %s", err)
             self._write_raw_sensor("error", error=str(err))
-            self._set_availability(is_available=False, error=str(err))
+            self._notify_failure(str(err))
             return
 
         self._publish_sensor_states(summary, scraped_at=datetime.now(UTC))
         self._write_raw_sensor("ok", summary=summary)
-        self._set_availability(is_available=True)
+        self._publish_mqtt_availability(is_available=True)
         self._clear_failure_notification()
         self.log(
             "Published SLC overview (balance present=%s, year=%s, as_of=%s)",
@@ -314,7 +305,7 @@ class SlcBalance(hass.Hass):
 
         self.log("MQTT connected for %s", self.mqtt_device_id)
         self._publish_mqtt_discovery()
-        self._set_availability(is_available=True, force=True)
+        self._publish_mqtt_availability(is_available=True)
 
     def _mqtt_topic(self, topic: str) -> str:
         """Build an absolute MQTT topic under the configured base topic.
@@ -512,63 +503,13 @@ class SlcBalance(hass.Hass):
 
         self.set_state(self.raw_sensor, state=state, attributes=attributes)
 
-    def _set_availability(
-        self,
-        *,
-        is_available: bool,
-        force: bool = False,
-        error: str | None = None,
-    ) -> None:
-        """Update MQTT availability based on consecutive poll outcomes.
-
-        Successful polls reset the failure counter. Failures only mark sensors
-        offline and trigger a notification after the configured threshold.
-
-        Args:
-            is_available: Whether the latest poll succeeded.
-            force: Republish online even if already marked available.
-            error: Optional failure reason retained for notification text.
-        """
-        if is_available:
-            self._consecutive_failures = 0
-            self._last_failure_message = None
-            if self._mqtt_reported_available and not force:
-                return
-
-            self._mqtt_reported_available = True
-            self._publish_mqtt_availability(is_available=True)
-            return
-
-        self._consecutive_failures += 1
-        if error:
-            self._last_failure_message = error
-
-        if self._consecutive_failures < self.availability_failure_threshold:
-            self.log(
-                "Transient SLC failure (%s/%s); keeping sensors available",
-                self._consecutive_failures,
-                self.availability_failure_threshold,
-            )
-            return
-
-        if self._mqtt_reported_available:
-            self._mqtt_reported_available = False
-            self._publish_mqtt_availability(is_available=False)
-
-        self._notify_failure()
-
-    def _notify_failure(self) -> None:
-        """Send a one-shot failure notification via the configured script."""
+    def _notify_failure(self, message: str) -> None:
+        """Notify once about an authentication, HTTP, or page parsing failure."""
         if self._failure_notified:
             return
 
-        message = self._last_failure_message or (
-            "Student loan balance could not be retrieved."
-        )
-        # Keep notification copy short and free of credentials / tokens.
         if len(message) > MAX_NOTIFICATION_ERROR_CHARS:
-            keep = MAX_NOTIFICATION_ERROR_CHARS - 3
-            message = f"{message[:keep]}..."
+            message = f"{message[: MAX_NOTIFICATION_ERROR_CHARS - 3]}..."
 
         self.call_service(
             "script/turn_on",
@@ -577,18 +518,17 @@ class SlcBalance(hass.Hass):
                 "clear_notification": True,
                 "title": "Student Loan Balance Update Failed",
                 "message": (
-                    "Could not refresh SLC sensors. "
-                    f"The portal login/page layout may have changed. ({message})"
+                    "SLC needs attention: check credentials or the portal page layout. "
+                    f"({message})"
                 ),
                 "notification_id": self.notification_id,
                 "mobile_notification_icon": "mdi:school-outline",
             },
         )
         self._failure_notified = True
-        self.log("Sent SLC failure notification (%s)", self.notification_id)
 
     def _clear_failure_notification(self) -> None:
-        """Clear the sticky failure notification after a successful poll."""
+        """Clear an actionable failure notification after a successful poll."""
         if not self._failure_notified:
             return
 
@@ -601,4 +541,3 @@ class SlcBalance(hass.Hass):
             },
         )
         self._failure_notified = False
-        self.log("Cleared SLC failure notification (%s)", self.notification_id)
