@@ -77,10 +77,7 @@ def detail_card(sensor: Sensor) -> dict[str, object]:
         value = "{{ value }}% · " + window_label(sensor)
     elif sensor.key.endswith("_reset"):
         label, icon = "Next reset", "mdi:calendar-clock"
-        value = (
-            "{{ as_timestamp(value) | timestamp_custom('%d %b, %H:%M') }}\n"
-            + window_label(sensor)
-        )
+        value = "{{ as_timestamp(value) | timestamp_custom('%d %b, %H:%M') }}"
     elif sensor.key.endswith("_credits"):
         label, icon = "Credits", "mdi:wallet-outline"
         value = compact_number("credits")
@@ -105,7 +102,7 @@ def detail_card(sensor: Sensor) -> dict[str, object]:
         ),
         "icon": icon,
         "color": "blue",
-        "multiline_secondary": True,
+        "multiline_secondary": not sensor.key.endswith("_reset"),
         "tap_action": {"action": "more-info"},
         "hold_action": {"action": "more-info"},
         "double_tap_action": {"action": "more-info"},
