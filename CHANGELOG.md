@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.37.0 (2026-10-12)
+
+### Features
+
+- **codex**: Track reset period progress alongside usage
+  ([#335](https://github.com/worganisation/home-assistant-appdaemon/pull/335),
+  [`4f4042a`](https://github.com/worganisation/home-assistant-appdaemon/commit/4f4042a7dc150dd611ac2f042be0cc6b873e5b13))
+
+
 ## v0.36.1 (2026-10-12)
 
 ### Bug Fixes
