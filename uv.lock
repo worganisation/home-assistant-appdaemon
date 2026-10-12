@@ -1,5 +1,5 @@
 version = 1
-revision = 3
+revision = 5
 requires-python = "==3.12.*"
 
 [[package]]
@@ -428,7 +428,7 @@ wheels = [
 
 [[package]]
 name = "ha-appdaemon"
-version = "0.35.1"
+version = "0.36.0"
 source = { virtual = "." }
 dependencies = [
     { name = "gitpython" },
