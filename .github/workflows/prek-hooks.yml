@@ -22,6 +22,6 @@ jobs:
     name: Prek Hooks
     uses: worganisation/github-config-files/.github/workflows/__prek-hooks.yml@0.10.0
     with:
-      python-version: '3.12'
+      python-version: '3.13'
       sync-project-dependencies: 'true'
     secrets: inherit
