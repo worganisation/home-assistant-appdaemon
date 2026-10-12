@@ -33,7 +33,10 @@ class Accounts(BaseModel):
 def window_label(sensor: Sensor) -> str:
     """Express the reported duration in days, hours or minutes."""
     if not (
-        match := re.fullmatch(r"(.+) (\d+) min (used|remaining|next reset)", sensor.name)
+        match := re.fullmatch(
+            r"(.+) (\d+) min (used|remaining|next reset|percent elapsed)",
+            sensor.name,
+        )
     ):
         return sensor.name
 
@@ -74,6 +77,9 @@ def detail_card(sensor: Sensor) -> dict[str, object]:
     value = "{{ value }}"
     if sensor.key.endswith("_remaining"):
         label, icon = "Remaining", "mdi:gauge"
+        value = "{{ value }}% · " + window_label(sensor)
+    elif sensor.key.endswith("_percent_elapsed"):
+        label, icon = "Period elapsed", "mdi:progress-clock"
         value = "{{ value }}% · " + window_label(sensor)
     elif sensor.key.endswith("_reset"):
         label, icon = "Next reset", "mdi:calendar-clock"
@@ -161,13 +167,26 @@ def sections(payload: dict[str, object]) -> list[dict[str, object]]:
             },
         )
         if used:
+            elapsed = [
+                sensor for sensor in details if sensor.key.endswith("_percent_elapsed")
+            ]
             cards.append(
                 {
                     "type": "custom:mini-graph-card",
-                    "name": "Codex usage — seven days",
+                    "name": "Usage vs period elapsed — seven days",
                     "entities": [
-                        {"entity": sensor.entity_id, "name": window_label(sensor)}
+                        {
+                            "entity": sensor.entity_id,
+                            "name": f"Used · {window_label(sensor)}",
+                        }
                         for sensor in used
+                    ]
+                    + [
+                        {
+                            "entity": sensor.entity_id,
+                            "name": f"Elapsed · {window_label(sensor)}",
+                        }
+                        for sensor in elapsed
                     ],
                     "hours_to_show": 168,
                     "points_per_hour": 1,
