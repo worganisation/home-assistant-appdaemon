@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.36.1 (2026-10-12)
+
+### Bug Fixes
+
+- **codex**: Make usage dashboard readings easier to scan
+  ([#334](https://github.com/worganisation/home-assistant-appdaemon/pull/334),
+  [`927ffd9`](https://github.com/worganisation/home-assistant-appdaemon/commit/927ffd9337f7209a10445266b17a4640cab87626))
+
+
 ## v0.36.0 (2026-10-12)
 
 ### Bug Fixes
