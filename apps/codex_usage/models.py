@@ -163,6 +163,8 @@ def quota_readings(limits: Limits) -> list[Reading]:
             "Available resets",
             limits.resets.available_count if limits.resets else None,
             "quota",
+            unit="resets",
+            state_class="measurement",
         ),
     ]
     buckets = limits.buckets
