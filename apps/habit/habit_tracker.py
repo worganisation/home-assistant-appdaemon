@@ -899,7 +899,8 @@ class HabitTracker(hass.Hass):
                 "history_end": today.isoformat(),
                 "completion_history": {
                     (today - timedelta(days=offset)).isoformat(): data.completions.get(
-                        slot, {},
+                        slot,
+                        {},
                     ).get((today - timedelta(days=offset)).isoformat(), 0)
                     for offset in range(28)
                 },
