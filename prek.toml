@@ -2,7 +2,7 @@
 # See https://prek.j178.dev for more information.
 #:schema https://www.schemastore.org/prek.json
 
-default_language_version = { python = "python3.12" }
+default_language_version = { python = "python3.13" }
 
 # TODO: worgarside/pre-commit-hooks-dependency-sync only understands
 # .pre-commit-config.yaml today, not prek.toml - it will fail here until
