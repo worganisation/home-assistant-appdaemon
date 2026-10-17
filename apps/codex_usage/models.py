@@ -156,12 +156,15 @@ def bucket_key(value: str) -> str:
 
 def quota_readings(limits: Limits) -> list[Reading]:
     """Normalize all present windows without assuming a fixed duration."""
+    now = datetime.now(UTC).timestamp()
     readings = [
         Reading(
             "available_resets",
             "Available resets",
             limits.resets.available_count if limits.resets else None,
             "quota",
+            unit="resets",
+            state_class="measurement",
         ),
     ]
     buckets = limits.buckets
@@ -183,14 +186,23 @@ def quota_readings(limits: Limits) -> list[Reading]:
                 "window": slot,
                 "window_duration_minutes": duration,
             }
+            percent_elapsed: float | None = None
+            if duration is not None and duration > 0 and window.resets_at is not None:
+                remaining_seconds = window.resets_at - now
+                percent_elapsed = round(
+                    min(100.0, max(0.0, (1 - remaining_seconds / (duration * 60)) * 100)),
+                    2,
+                )
+
             for metric, value in (
                 ("used", window.used_percent),
                 ("remaining", max(0, min(100, 100 - window.used_percent))),
+                ("percent_elapsed", percent_elapsed),
             ):
                 readings.append(
                     Reading(
                         f"{prefix}_{slot}_{metric}",
-                        f"{title} {metric}",
+                        f"{title} {metric.replace('_', ' ')}",
                         value,
                         "quota",
                         "%",

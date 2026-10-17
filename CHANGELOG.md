@@ -2,6 +2,45 @@
 
 <!-- version list -->
 
+## v0.37.0 (2026-10-12)
+
+### Features
+
+- **codex**: Track reset period progress alongside usage
+  ([#335](https://github.com/worganisation/home-assistant-appdaemon/pull/335),
+  [`4f4042a`](https://github.com/worganisation/home-assistant-appdaemon/commit/4f4042a7dc150dd611ac2f042be0cc6b873e5b13))
+
+
+## v0.36.1 (2026-10-12)
+
+### Bug Fixes
+
+- **codex**: Make usage dashboard readings easier to scan
+  ([#334](https://github.com/worganisation/home-assistant-appdaemon/pull/334),
+  [`927ffd9`](https://github.com/worganisation/home-assistant-appdaemon/commit/927ffd9337f7209a10445266b17a4640cab87626))
+
+
+## v0.36.0 (2026-10-12)
+
+### Bug Fixes
+
+- **slc**: Preserve readings and alert only on actionable failures
+  ([#332](https://github.com/worganisation/home-assistant-appdaemon/pull/332),
+  [`f35392e`](https://github.com/worganisation/home-assistant-appdaemon/commit/f35392edf1b892392aa6d7344cbe52cb98dac4a2))
+
+### Build System
+
+- **deps**: Bump the uv-security-dependencies group across 1 directory with 3 updates
+  ([#330](https://github.com/worganisation/home-assistant-appdaemon/pull/330),
+  [`bbb7182`](https://github.com/worganisation/home-assistant-appdaemon/commit/bbb71820a38e96f6b0f96d928ecfb259d875368e))
+
+### Features
+
+- **codex**: Monitor account usage through AppDaemon
+  ([#331](https://github.com/worganisation/home-assistant-appdaemon/pull/331),
+  [`38683d6`](https://github.com/worganisation/home-assistant-appdaemon/commit/38683d64a3884e2fc2d1d837797d043f40a98350))
+
+
 ## v0.35.1 (2026-10-06)
 
 ### Bug Fixes

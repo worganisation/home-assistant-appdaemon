@@ -220,24 +220,6 @@ oauth_callback_broker:
   redirect_uri: !secret oauth_callback_redirect_uri
   state_db: /data/oauth_callback/pending_flows.sqlite3
 
-monzo_auto_saver:
-  module: auto_saver
-  class: AutoSaver
-  dependencies: oauth_callback_broker
-  monzo_client_id: !secret monzo_auto_saver_client_id
-  monzo_client_secret: !secret monzo_auto_saver_client_secret
-  savings_pot_id: !secret monzo_savings_pot_id
-  spotify_client_id: !secret spotify_monzo_auto_save_client_id
-  spotify_client_secret: !secret spotify_monzo_auto_save_client_secret
-  truelayer_client_id: !secret truelayer_client_id
-  truelayer_client_secret: !secret truelayer_client_secret
-  truelayer_reauth_var: var.truelayer_reauth_amex_auto_saver
-  truelayer_reauth_trigger: input_button.oauth_reauth_truelayer_amex_auto_saver
-  monzo_reauth_var: var.monzo_reauth_auto_saver
-  monzo_reauth_trigger: input_button.oauth_reauth_monzo_auto_saver
-  spotify_reauth_var: var.spotify_reauth_auto_saver
-  spotify_reauth_trigger: input_button.oauth_reauth_spotify_auto_saver
-
 monzo_credit_card_pot_manager:
   module: credit_card_pot_manager
   class: CreditCardPotManager
