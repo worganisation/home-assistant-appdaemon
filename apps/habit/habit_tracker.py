@@ -3160,6 +3160,7 @@ class HabitTracker(hass.Hass):
         for slot in data.habits:
             self._publish_habit_state(user, slot)
             self._publish_next_reminder(user, slot)
+        self._publish_mood_state(user)
 
     def _logical_day_rollover(self, kwargs: dict[str, Any]) -> None:
         user = str(kwargs["user"])
