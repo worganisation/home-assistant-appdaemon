@@ -287,3 +287,9 @@ For troubleshooting, check:
 3. The contents and permissions of the persistence directory.
 4. That the configured Home Assistant labels and context entities exist.
 5. That `reminders_enabled` has the intended value for the current migration stage.
+
+## Diary source attributes
+
+Each habit status sensor publishes `history_start`, `history_end` and `completion_history`: an inclusive 28-day map of local calendar dates to recorded completion counts. Zero means no recorded completion, not a skipped-day exemption. The configured flag and stable slot identify active habits; clearing a habit removes its history.
+
+The mood summary sensor publishes `diary_checkins` with stable IDs, logical dates, optional occurrence timestamps, exact notes, labels and scores. `diary_history_start` and `diary_history_end` identify its complete 28-day window. Consumers replace their view within that window so edits and deletions propagate, and preserve unknown times rather than inventing noon timestamps. These attributes contain personal diary content and use the same private MQTT connection as the tracker.
