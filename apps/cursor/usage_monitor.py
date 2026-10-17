@@ -217,6 +217,7 @@ class CursorUsageMonitor(hass.Hass):
 
     def initialize(self) -> None:
         """Initialize account storage, MQTT, token handling, and polling."""
+        self._stopping = False
         self.poll_interval = int(
             self.args.get("poll_interval_seconds", DEFAULT_POLL_INTERVAL),
         )
@@ -242,14 +243,25 @@ class CursorUsageMonitor(hass.Hass):
 
     def terminate(self) -> None:
         """Mark sensors offline and close network clients."""
-        self.http.close()
-        if self.mqtt_client is None:
-            return
-        self._publish_mqtt(self._mqtt_global_topic("availability"), "offline")
-        for account in tuple(self.accounts.values()):
-            self._publish_account_availability(account, is_available=False)
-        self.mqtt_client.disconnect()
-        self.mqtt_client.loop_stop()
+        self._stopping = True
+        self._mqtt_connected = False
+
+        try:
+            self.http.close()
+        finally:
+            if client := self.mqtt_client:
+                try:
+                    client.publish(
+                        self._mqtt_global_topic("availability"),
+                        "offline",
+                        qos=self.mqtt_qos,
+                        retain=True,
+                    )
+                finally:
+                    try:
+                        client.disconnect()
+                    finally:
+                        client.loop_stop()
 
     @staticmethod
     def _account_id(subject: str) -> str:
@@ -439,6 +451,9 @@ class CursorUsageMonitor(hass.Hass):
     def poll_cursor(self, kwargs: dict[str, Any] | None = None) -> None:
         """Fetch and publish usage for every stored Cursor account."""
         del kwargs
+        if self._stopping:
+            return
+
         if not self.accounts:
             self.log("Waiting for a Cursor session token")
             return
@@ -457,6 +472,9 @@ class CursorUsageMonitor(hass.Hass):
 
     def _poll_account(self, account: CursorAccount) -> None:
         """Fetch Cursor usage and publish one account's latest state."""
+        if self._stopping:
+            return
+
         try:
             state = self._fetch_usage(account.token)
         except CursorAuthenticationError as error:
@@ -471,6 +489,9 @@ class CursorUsageMonitor(hass.Hass):
         except (RequestException, TypeError, ValueError, KeyError) as error:
             self.error("Cursor usage poll failed for %s: %s", account.email, error)
             self._publish_error_state(account, "error", str(error), token=account.token)
+            return
+
+        if self._stopping:
             return
 
         latest_state = self._latest_states.setdefault(account.account_id, {})
@@ -806,6 +827,9 @@ class CursorUsageMonitor(hass.Hass):
     ) -> None:
         """Publish discovery, availability, and state after MQTT connects."""
         del client, userdata, flags, properties
+        if self._stopping:
+            return
+
         is_failure = getattr(reason_code, "is_failure", None)
         failed = bool(is_failure) if isinstance(is_failure, bool) else reason_code != 0
         if failed:
@@ -831,8 +855,9 @@ class CursorUsageMonitor(hass.Hass):
 
     def _publish_mqtt(self, topic: str, payload: Any, *, retain: bool = True) -> None:
         """Publish a retained or transient MQTT payload."""
-        if self.mqtt_client is None:
+        if self._stopping or self.mqtt_client is None:
             return
+
         if not isinstance(payload, str):
             payload = json.dumps(payload, sort_keys=True)
         self.mqtt_client.publish(topic, payload, qos=self.mqtt_qos, retain=retain)
