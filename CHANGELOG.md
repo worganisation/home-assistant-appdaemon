@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v0.37.1 (2026-10-17)
+
+### Bug Fixes
+
+- Mark Codex available resets as numeric measurements
+  ([#337](https://github.com/worganisation/home-assistant-appdaemon/pull/337),
+  [`d494d89`](https://github.com/worganisation/home-assistant-appdaemon/commit/d494d89c8f53f214503cad8e312cfb75a04ede8e))
+
+- **cursor**: Stop MQTT publishing during app shutdown
+  ([#338](https://github.com/worganisation/home-assistant-appdaemon/pull/338),
+  [`1e19428`](https://github.com/worganisation/home-assistant-appdaemon/commit/1e194289722d6e33f7358936cecb6a79958b4b26))
+
+### Chores
+
+- Remove legacy AutoSaver app
+  ([#336](https://github.com/worganisation/home-assistant-appdaemon/pull/336),
+  [`a26c468`](https://github.com/worganisation/home-assistant-appdaemon/commit/a26c46840d7228b61a024067e8e2006adf01aa80))
+
+- **deps**: Align Python with AppDaemon 3.13
+  ([#333](https://github.com/worganisation/home-assistant-appdaemon/pull/333),
+  [`fc11d37`](https://github.com/worganisation/home-assistant-appdaemon/commit/fc11d37a6c98e9896d8cabcd82004658fd55edbf))
+
+
 ## v0.37.0 (2026-10-12)
 
 ### Features
