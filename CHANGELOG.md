@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.38.0 (2026-10-18)
+
+### Features
+
+- Publish dated habit and mood diary sources
+  ([#339](https://github.com/worganisation/home-assistant-appdaemon/pull/339),
+  [`2742d26`](https://github.com/worganisation/home-assistant-appdaemon/commit/2742d2683e4d463056b26963aa2de8d8de4df5bd))
+
+
 ## v0.37.1 (2026-10-17)
 
 ### Bug Fixes
