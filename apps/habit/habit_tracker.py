@@ -895,6 +895,15 @@ class HabitTracker(hass.Hass):
             f"{prefix}/status/attributes",
             {
                 **self._slot_attributes(config),
+                "history_start": (today - timedelta(days=27)).isoformat(),
+                "history_end": today.isoformat(),
+                "completion_history": {
+                    (today - timedelta(days=offset)).isoformat(): data.completions.get(
+                        slot,
+                        {},
+                    ).get((today - timedelta(days=offset)).isoformat(), 0)
+                    for offset in range(28)
+                },
                 "required": self._is_required_today(user, slot),
                 "requirement_template": config.requirement_template,
                 "requirement_error": self._requirement_errors.get((user, slot)),
@@ -931,6 +940,7 @@ class HabitTracker(hass.Hass):
         data = self.store.data.users[user]
         prefix = self.mqtt.topic(f"{user}/mood")
         today = self._logical_today()
+        diary_today = self.datetime().date()
         streak = calculate_mood_streak(data.mood_checkins, today=today)
         summaries = self._recent_mood_summaries(data, today=today, days=28)
         current_summary = summarize_mood_day(data.mood_checkins, logical_day=today)
@@ -965,6 +975,22 @@ class HabitTracker(hass.Hass):
                 "seven_days": summaries[-7:],
                 "daily_series": summaries,
                 "checkin_series": self._mood_chart_checkins(data, today=today),
+                "diary_checkins": [
+                    {
+                        "id": checkin.id,
+                        "logical_date": checkin.logical_date,
+                        "occurred_at": checkin.occurred_at,
+                        "mood": checkin.mood,
+                        "score": checkin.score,
+                        "note": checkin.note,
+                    }
+                    for checkin in data.mood_checkins
+                    if (diary_today - timedelta(days=27)).isoformat()
+                    <= checkin.logical_date
+                    <= diary_today.isoformat()
+                ],
+                "diary_history_start": (diary_today - timedelta(days=27)).isoformat(),
+                "diary_history_end": diary_today.isoformat(),
                 "score_labels": {
                     "1": "Very Low",
                     "2": "Low",
@@ -3134,6 +3160,7 @@ class HabitTracker(hass.Hass):
         for slot in data.habits:
             self._publish_habit_state(user, slot)
             self._publish_next_reminder(user, slot)
+        self._publish_mood_state(user)
 
     def _logical_day_rollover(self, kwargs: dict[str, Any]) -> None:
         user = str(kwargs["user"])
