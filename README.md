@@ -192,3 +192,7 @@ Each MQTT client ID must have exactly one active owner. Repeated MQTT disconnect
 can indicate duplicate AppDaemon instances or surviving clients after a reload;
 check broker logs for `already connected` messages. Changing the client ID does not
 resolve multiple apps publishing to the same state and availability topics.
+
+## Hammersmith commute
+
+The [commute app](apps/commute/README.md) owns session decisions, TfL polling, train selection and notification scheduling while retaining Home Assistant inputs, diagnostic entities and persisted timing samples.

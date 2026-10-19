@@ -358,3 +358,9 @@ mam_monitor:
     wedges: [wedges]
     hnr: [[seedHnr, count], [inactHnr, count]]
     inactive_unsatisfied: [inactUnsat, count]
+
+# Hammersmith commute
+
+will_commute:
+  module: commute.app
+  class: Commute
