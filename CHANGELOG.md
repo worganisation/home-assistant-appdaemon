@@ -2,6 +2,27 @@
 
 <!-- version list -->
 
+## v0.38.1 (2026-10-23)
+
+### Build System
+
+- **deps**: Bump the uv-security-dependencies group across 1 directory with 3 updates
+  ([#343](https://github.com/worganisation/home-assistant-appdaemon/pull/343),
+  [`32dee81`](https://github.com/worganisation/home-assistant-appdaemon/commit/32dee814bcd1f3c7a207756400efeef7fdb2daaf))
+
+### Chores
+
+- Standardise semantic-release defaults
+  ([#340](https://github.com/worganisation/home-assistant-appdaemon/pull/340),
+  [`8916dae`](https://github.com/worganisation/home-assistant-appdaemon/commit/8916dae1503ff771cf176edc445976ab820b35e5))
+
+### Refactoring
+
+- Move commute decisions into AppDaemon
+  ([#342](https://github.com/worganisation/home-assistant-appdaemon/pull/342),
+  [`89bda63`](https://github.com/worganisation/home-assistant-appdaemon/commit/89bda630146f7d006d9cce813d39ad30563ae65e))
+
+
 ## v0.38.0 (2026-10-18)
 
 ### Features
