@@ -125,13 +125,6 @@ SENSORS = (
         state_class="measurement",
     ),
     Sensor(
-        "local_unsatisfied",
-        "Local unsatisfied estimate",
-        "qbt",
-        "torrents",
-        state_class="measurement",
-    ),
-    Sensor(
         "attention_count",
         "Torrents needing attention",
         "qbt",

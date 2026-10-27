@@ -170,8 +170,8 @@ class QbtClient:
         self.username = username
         self.password = password
 
-    def fetch(self, previous: dict[str, Any], now: float) -> dict[str, Any]:
-        """Return a complete snapshot or fail without declaring torrents missing."""
+    def fetch(self, now: float) -> dict[str, Any]:
+        """Return a complete snapshot of current MAM torrents."""
         deadline = time.monotonic() + 120
         with Session() as session:
             session.trust_env = False
@@ -231,7 +231,6 @@ class QbtClient:
                     files,
                     trackers,
                     preferences,
-                    previous.get(torrent_hash, {}),
                     now,
                 )
             return result

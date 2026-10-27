@@ -19,7 +19,6 @@ from mam.model import (
     assess,
     is_mam_tracker,
     number,
-    reconcile_torrents,
     safe_text,
     size_bytes,
     torrent_snapshot,
@@ -45,8 +44,6 @@ def torrent(**changes) -> dict:
     raw = {
         "name": "Example book",
         "state": "stalledUP",
-        "seeding_time": 3600,
-        "added_on": 1000,
         "ratio_limit": -1,
         "seeding_time_limit": -1,
         "inactive_seeding_time_limit": -1,
@@ -55,14 +52,13 @@ def torrent(**changes) -> dict:
     return raw
 
 
-def snapshot(raw=None, files=None, previous=None) -> dict:
+def snapshot(raw=None, files=None) -> dict:
     """Normalize a synthetic complete torrent."""
     return torrent_snapshot(
         raw or torrent(),
         files if files is not None else [{"size": GIB, "priority": 1, "progress": 1}],
         [{"url": "https://t.myanonamouse.net/announce", "status": 2}],
         {},
-        previous or {},
         2000,
     )
 
@@ -131,10 +127,9 @@ class MamModelTests(unittest.TestCase):
         assert not is_mam_tracker("https://other.test/myanonamouse.net")
 
     def test_idle_seeding_is_normal(self) -> None:
-        """No upload traffic is necessary to accumulate client seed time."""
+        """An idle torrent with a working tracker is healthy."""
         result = snapshot()
         assert result["issues"] == []
-        assert result["hours_remaining"] == 71
 
     def test_skipped_cover_invalidates_completion(self) -> None:
         """A 100 percent selected-file progress is insufficient."""
@@ -144,27 +139,13 @@ class MamModelTests(unittest.TestCase):
         ]
         result = snapshot(torrent(progress=1), files)
         assert not result["complete"]
-        assert result["seed_hours"] is None
         assert "skipped_files" in result["issues"]
         assert result["remaining_gib"] > 0
 
-    def test_retention_and_counter_reset(self) -> None:
-        """Finite limits and resetting local counters remain visible risks."""
-        previous = snapshot(torrent(seeding_time=7200))
-        result = snapshot(torrent(ratio_limit=1), previous=previous)
-        assert "counter_reset" in result["issues"]
+    def test_retention_limit(self) -> None:
+        """Finite retention limits remain visible risks."""
+        result = snapshot(torrent(ratio_limit=1))
         assert "retention_limit" in result["issues"]
-        assert snapshot(previous=result)["counter_reset"]
-
-    def test_disappearance_preserves_obligation(self) -> None:
-        """A removed client entry must not remove an unresolved obligation."""
-        result = reconcile_torrents({}, {"hash": snapshot()})
-        assert result["hash"]["missing"]
-        assert result["hash"]["issues"] == ["missing_torrent"]
-        assert (
-            reconcile_torrents({}, {"hash": snapshot(torrent(seeding_time=72 * 3600))})
-            == {}
-        )
 
     def test_budget_and_reserve(self) -> None:
         """Outstanding bytes and reserve both consume estimated headroom."""

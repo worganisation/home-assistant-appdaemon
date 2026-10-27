@@ -9,8 +9,6 @@ from typing import Any
 from urllib.parse import urlsplit
 
 GIB = 1024**3
-SEED_SECONDS = 72 * 3600
-DAY = 86400
 TRACKER_WORKING = 2
 USE_GLOBAL_LIMIT = -2
 
@@ -199,29 +197,18 @@ def unsatisfied_limit(
     return value, "conservative class fallback" if value else "unknown class"
 
 
-def torrent_snapshot(  # noqa: C901 - independent torrent safety checks
+def torrent_snapshot(
     torrent: dict[str, Any],
     files: list[dict[str, Any]],
     trackers: list[dict[str, Any]],
     preferences: dict[str, Any],
-    previous: dict[str, Any],
     now: float,
 ) -> dict[str, Any]:
-    """Inspect every file; client seed time is never tracker-confirmed satisfaction."""
+    """Inspect file completion, tracker health and retention settings."""
     complete = bool(files) and all(number(f.get("progress")) == 1 for f in files)
     skipped = sum(f.get("priority") == 0 for f in files)
     size = sum(float(f["size"]) for f in files)
     remaining = sum(float(f["size"]) * (1 - float(f["progress"])) for f in files)
-    seeding = number(torrent.get("seeding_time"))
-    reset = bool(previous.get("counter_reset")) or (
-        seeding is not None
-        and previous.get("seed_seconds") is not None
-        and seeding < previous["seed_seconds"]
-    )
-    seed_seconds = seeding if complete and not skipped else None
-    seed_remaining = (
-        max(0, SEED_SECONDS - seed_seconds) if seed_seconds is not None else None
-    )
     state = str(torrent.get("state", "unknown"))
     mam_trackers = [t for t in trackers if is_mam_tracker(t.get("url"))]
     tracker_ok = any(t.get("status") == TRACKER_WORKING for t in mam_trackers)
@@ -261,13 +248,6 @@ def torrent_snapshot(  # noqa: C901 - independent torrent safety checks
         issues.append("tracker_error")
     if complete and state not in {"uploading", "stalledUP", "forcedUP"}:
         issues.append("not_seeding")
-    if reset:
-        issues.append("counter_reset")
-    added = number(torrent.get("added_on"))
-    # Local added_on is only a conservative deadline proxy, not MAM's snatch date.
-    deadline = added + 30 * DAY if added and added > 0 else None
-    if deadline and seed_remaining and deadline - now - seed_remaining < DAY:
-        issues.append("deadline_estimate")
     return {
         "name": safe_text(torrent.get("name", "Unnamed torrent")),
         "state": state,
@@ -276,12 +256,6 @@ def torrent_snapshot(  # noqa: C901 - independent torrent safety checks
         "complete": complete,
         "skipped_files": skipped,
         "file_count": len(files),
-        "seed_seconds": seed_seconds,
-        "seed_hours": None if seed_seconds is None else round(seed_seconds / 3600, 2),
-        "hours_remaining": None
-        if seed_remaining is None
-        else round(seed_remaining / 3600, 2),
-        "counter_reset": reset,
         "tracker_ok": tracker_ok,
         "limits": limits,
         "ratio": number(torrent.get("ratio")),
@@ -289,30 +263,9 @@ def torrent_snapshot(  # noqa: C901 - independent torrent safety checks
         "uploaded_gib": (number(torrent.get("uploaded")) or 0) / GIB,
         "upload_speed": number(torrent.get("upspeed")),
         "download_speed": number(torrent.get("dlspeed")),
-        "deadline_estimate": deadline,
         "last_seen": now,
         "issues": issues,
-        "missing": False,
     }
-
-
-def reconcile_torrents(
-    current: dict[str, Any],
-    previous: dict[str, Any],
-) -> dict[str, Any]:
-    """Retain disappeared torrents whose local seeding obligation is unresolved."""
-    result = dict(current)
-    for key, torrent in previous.items():
-        if key not in result and (
-            torrent.get("hours_remaining") != 0 or torrent.get("counter_reset")
-        ):
-            result[key] = {
-                **torrent,
-                "missing": True,
-                "issues": ["missing_torrent"],
-                "state": "missing",
-            }
-    return result
 
 
 def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
@@ -397,9 +350,6 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
     if qbt_fresh:
         values["torrent_count"] = len(torrents)
         values["outstanding"] = sum(t["remaining_gib"] for t in torrents.values())
-        values["local_unsatisfied"] = sum(
-            t.get("hours_remaining") != 0 for t in torrents.values()
-        )
         values["attention_count"] = sum(bool(t["issues"]) for t in torrents.values())
         for key, torrent in torrents.items():
             for issue in torrent["issues"]:
@@ -409,7 +359,6 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
                     in {
                         "skipped_files",
                         "missing_files",
-                        "missing_torrent",
                         "retention_limit",
                     }
                     else "warning"

@@ -348,16 +348,20 @@ mam_monitor:
   mqtt_base_topic: appdaemon/mam
   # Verified jsonLoad.php fields; nested path lists sum disjoint categories.
   response_paths:
-    unsatisfied: [unsat, count]
-    limit: [unsat, limit]
-    satisfied: [[sSat, count], [inactSat, count]]
-    seeding: [[sSat, count], [seedUnsat, count], [seedHnr, count], [upAct, count]]
-    leeching: [leeching, count]
-    connectable: [connectable]
+    unsatisfied: [snatch_summary, unsat, count]
+    limit: [snatch_summary, unsat, limit]
+    satisfied: [[snatch_summary, sSat, count], [snatch_summary, inactSat, count]]
+    seeding:
+      - [snatch_summary, sSat, count]
+      - [snatch_summary, seedUnsat, count]
+      - [snatch_summary, seedHnr, count]
+      - [snatch_summary, upAct, count]
+    leeching: [snatch_summary, leeching, count]
+    connectable: [snatch_summary, connectable]
     notices: [notifs]
     wedges: [wedges]
-    hnr: [[seedHnr, count], [inactHnr, count]]
-    inactive_unsatisfied: [inactUnsat, count]
+    hnr: [[snatch_summary, seedHnr, count], [snatch_summary, inactHnr, count]]
+    inactive_unsatisfied: [snatch_summary, inactUnsat, count]
 
 # Hammersmith commute
 
