@@ -220,8 +220,6 @@ class MamMonitor(hass.Hass):
         if source == "mam":
             token, fingerprint = self.mam.credential()
             changed = fingerprint != record.get("credential_fingerprint")
-            if record.get("auth_blocked") and not changed:
-                raise PollError("authentication_failed")
             # Record the fingerprint only after a response, so transport failures
             # on a new credential cannot fall back to cookies from its predecessor.
             try:
@@ -229,12 +227,10 @@ class MamMonitor(hass.Hass):
                 snapshot = account_snapshot(payload, self.args.get("response_paths", {}))
             except PollError as error:
                 if error.category == "authentication_failed":
-                    record.update(
-                        {"auth_blocked": True, "credential_fingerprint": fingerprint},
-                    )
+                    record["credential_fingerprint"] = fingerprint
                 raise
             self.state["account"] = snapshot
-            record.update({"auth_blocked": False, "credential_fingerprint": fingerprint})
+            record["credential_fingerprint"] = fingerprint
         else:
             current = self.qbt.fetch(self.state["torrents"], now)
             self.state["torrents"] = reconcile_torrents(current, self.state["torrents"])

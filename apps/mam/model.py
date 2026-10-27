@@ -336,7 +336,9 @@ def assess(  # noqa: C901, PLR0912 - independent account and torrent checks
         issues["mam_session"] = (
             "warning",
             "MAM account session is missing or invalid. It may have expired or been revoked, "
-            "or its IP/ASN permissions may not match Home Assistant. Create a dedicated "
+            "or its IP/ASN permissions may not match Home Assistant. Requests retry with "
+            "backoff. If the problem persists, verify the session and its permissions. "
+            "If a replacement is needed, create a dedicated "
             "MAM API session, update mam_monitor_mam_id in Home Assistant secrets.yaml, "
             "then reload the MAM app or restart AppDaemon. Account data is unavailable.",
         )

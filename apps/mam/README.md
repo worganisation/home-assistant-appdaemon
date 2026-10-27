@@ -23,9 +23,7 @@ the secret. Do not put the session in Git, chat, logs, or command arguments.
 The configured session is not copied to a separate credential file. Server cookie
 rotations are stored privately in `/data/mam/cookies.txt` (mode 0600, directory
 0700). Changing the configured session resets those cookies on its next scheduled
-poll. Authentication errors block further MAM requests with that credential.
-Cooldowns and backoff survive restarts; deleting runtime state is not an
-appropriate retry mechanism.
+poll. Only the current MAM session cookie is sent, including when its domain scope changes during rotation. Authentication errors use the normal exponential polling backoff, capped at six hours, and a successful retry restores account data automatically. Cooldowns and backoff survive restarts; deleting runtime state is not an appropriate retry mechanism.
 
 `input_number.mam_download_reserve_gib` controls the spare credit in GiB. The app
 initializes a new zero-valued helper to 2 once and persists that initialization.
