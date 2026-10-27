@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.38.2 (2026-10-27)
+
+### Bug Fixes
+
+- **mam**: Recover authentication and use tracker statistics
+  ([`37b6a96`](https://github.com/worganisation/home-assistant-appdaemon/commit/37b6a96d345e4a751be2b92ca993827619ddb383))
+
+
 ## v0.38.1 (2026-10-23)
 
 ### Build System
