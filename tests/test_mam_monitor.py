@@ -19,7 +19,6 @@ from mam.model import (
     assess,
     is_mam_tracker,
     number,
-    reconcile_torrents,
     safe_text,
     size_bytes,
     torrent_snapshot,
@@ -45,8 +44,6 @@ def torrent(**changes) -> dict:
     raw = {
         "name": "Example book",
         "state": "stalledUP",
-        "seeding_time": 3600,
-        "added_on": 1000,
         "ratio_limit": -1,
         "seeding_time_limit": -1,
         "inactive_seeding_time_limit": -1,
@@ -55,14 +52,13 @@ def torrent(**changes) -> dict:
     return raw
 
 
-def snapshot(raw=None, files=None, previous=None) -> dict:
+def snapshot(raw=None, files=None) -> dict:
     """Normalize a synthetic complete torrent."""
     return torrent_snapshot(
         raw or torrent(),
         files if files is not None else [{"size": GIB, "priority": 1, "progress": 1}],
         [{"url": "https://t.myanonamouse.net/announce", "status": 2}],
         {},
-        previous or {},
         2000,
     )
 
@@ -131,10 +127,9 @@ class MamModelTests(unittest.TestCase):
         assert not is_mam_tracker("https://other.test/myanonamouse.net")
 
     def test_idle_seeding_is_normal(self) -> None:
-        """No upload traffic is necessary to accumulate client seed time."""
+        """An idle torrent with a working tracker is healthy."""
         result = snapshot()
         assert result["issues"] == []
-        assert result["hours_remaining"] == 71
 
     def test_skipped_cover_invalidates_completion(self) -> None:
         """A 100 percent selected-file progress is insufficient."""
@@ -144,27 +139,13 @@ class MamModelTests(unittest.TestCase):
         ]
         result = snapshot(torrent(progress=1), files)
         assert not result["complete"]
-        assert result["seed_hours"] is None
         assert "skipped_files" in result["issues"]
         assert result["remaining_gib"] > 0
 
-    def test_retention_and_counter_reset(self) -> None:
-        """Finite limits and resetting local counters remain visible risks."""
-        previous = snapshot(torrent(seeding_time=7200))
-        result = snapshot(torrent(ratio_limit=1), previous=previous)
-        assert "counter_reset" in result["issues"]
+    def test_retention_limit(self) -> None:
+        """Finite retention limits remain visible risks."""
+        result = snapshot(torrent(ratio_limit=1))
         assert "retention_limit" in result["issues"]
-        assert snapshot(previous=result)["counter_reset"]
-
-    def test_disappearance_preserves_obligation(self) -> None:
-        """A removed client entry must not remove an unresolved obligation."""
-        result = reconcile_torrents({}, {"hash": snapshot()})
-        assert result["hash"]["missing"]
-        assert result["hash"]["issues"] == ["missing_torrent"]
-        assert (
-            reconcile_torrents({}, {"hash": snapshot(torrent(seeding_time=72 * 3600))})
-            == {}
-        )
 
     def test_budget_and_reserve(self) -> None:
         """Outstanding bytes and reserve both consume estimated headroom."""
@@ -328,17 +309,34 @@ class MamRuntimeTests(unittest.TestCase):
         )
         app.render.assert_called_once()
 
-    def test_authentication_failure_blocks_same_session(self) -> None:
-        """A rejected credential is not retried after cooldown or app reload."""
+    def test_authentication_failure_recovers_after_backoff(self) -> None:
+        """A rejected session recovers on its next scheduled successful retry."""
         app = self.make_app()
         app.mam = MagicMock()
         app.mam.credential.return_value = ("test-session", "fingerprint")
         app.state["mam"].update(
-            {"auth_blocked": True, "credential_fingerprint": "fingerprint"},
+            {
+                "auth_blocked": True,
+                "credential_fingerprint": "fingerprint",
+                "next_poll": 0,
+            },
         )
-        with self.assertRaises(PollError):  # noqa: PT027
-            app.poll_source("mam", 100)
-        app.mam.fetch.assert_not_called()
+        app.render = MagicMock()
+        app.mam.fetch.side_effect = [
+            PollError("authentication_failed"),
+            {"uid": "123", "uploaded": "5 GiB", "downloaded": "1 GiB"},
+        ]
+        with patch("mam.mam_monitor.time.time", return_value=100):
+            app.tick()
+        assert app.state["mam"]["next_poll"] == 1900
+        assert app.state["mam"]["error"] == "authentication_failed"
+
+        with patch("mam.mam_monitor.time.time", return_value=1900):
+            app.tick()
+        assert app.mam.fetch.call_count == 2
+        assert app.state["mam"]["last_success"] == 1900
+        assert app.state["mam"]["failures"] == 0
+        assert app.fresh("mam", 1900)
 
     def test_request_failure_reserves_cooldown_before_attempt(self) -> None:
         """No network request precedes the durable cooldown reservation."""
@@ -378,22 +376,25 @@ class MamRuntimeTests(unittest.TestCase):
 
     def test_cookie_rotation(self) -> None:
         """A response cookie is saved for the next scheduled request."""
-        from requests import Session  # noqa: PLC0415
+        from requests import Request, Session  # noqa: PLC0415
+        from requests.cookies import RequestsCookieJar  # noqa: PLC0415
 
         with tempfile.TemporaryDirectory() as directory:
             client = MamClient(Path(directory))
             session = Session()
             response = MagicMock(status_code=200)
             response.json.return_value = {"uid": "123"}
+            response.cookies = RequestsCookieJar()
+            response.cookies.set(
+                "mam_id",
+                "rotated",
+                domain=".myanonamouse.net",
+                path="/",
+                secure=True,
+            )
 
             def response_with_rotation(*_args, **_kwargs):
-                session.cookies.set(
-                    "mam_id",
-                    "rotated",
-                    domain="www.myanonamouse.net",
-                    path="/",
-                    secure=True,
-                )
+                session.cookies.update(response.cookies)
                 return response
 
             session.get = MagicMock(side_effect=response_with_rotation)
@@ -401,6 +402,32 @@ class MamRuntimeTests(unittest.TestCase):
                 client.fetch("test-session", reset_cookies=True)
             assert "rotated" in client.cookie_path.read_text()
             assert client.cookie_path.stat().st_mode & 0o077 == 0
+
+            session.cookies.set(
+                "mam_id",
+                "test-session",
+                domain="www.myanonamouse.net",
+                path="/",
+            )
+            from http.cookiejar import MozillaCookieJar  # noqa: PLC0415
+
+            jar = MozillaCookieJar(str(client.cookie_path))
+            for cookie in session.cookies:
+                jar.set_cookie(cookie)
+            jar.save(ignore_discard=True)
+
+            with Session() as restored:
+
+                def check_cookie(*_args, **_kwargs):
+                    request = restored.prepare_request(
+                        Request("GET", "https://www.myanonamouse.net/jsonLoad.php"),
+                    )
+                    assert request.headers["Cookie"] == "mam_id=rotated"
+                    return response
+
+                restored.get = MagicMock(side_effect=check_cookie)
+                with patch("mam.clients.Session", return_value=restored):
+                    client.fetch("test-session", reset_cookies=False)
 
 
 if __name__ == "__main__":

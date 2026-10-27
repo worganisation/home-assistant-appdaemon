@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any
 from requests import Response, Session
 
 if TYPE_CHECKING:
+    from http.cookiejar import Cookie, CookieJar
     from pathlib import Path
 
 from mam.model import is_mam_tracker, number, torrent_snapshot
@@ -79,6 +80,15 @@ def check_response(response: Response) -> None:
         raise PollError("http_error")
 
 
+def keep_mam_cookie(jar: CookieJar, current: Cookie) -> None:
+    """Keep one MAM session cookie across overlapping domain and path scopes."""
+    for cookie in list(jar):
+        if cookie.name == "mam_id":
+            jar.clear(cookie.domain, cookie.path, cookie.name)
+
+    jar.set_cookie(current)
+
+
 class MamClient:
     """Use only the documented user-data endpoint with an isolated cookie jar."""
 
@@ -105,13 +115,20 @@ class MamClient:
         jar = MozillaCookieJar(str(self.cookie_path))
         if self.cookie_path.exists() and not reset_cookies:
             jar.load(ignore_discard=True, ignore_expires=False)
+
+        if rotated := next(
+            (c for c in jar if c.name == "mam_id" and c.domain == ".myanonamouse.net"),
+            None,
+        ):
+            keep_mam_cookie(jar, rotated)
+
         with Session() as session:
             session.trust_env = False
-            if reset_cookies or not list(jar):
+            if not any(cookie.name == "mam_id" for cookie in jar):
                 session.cookies.set(
                     "mam_id",
                     token,
-                    domain="www.myanonamouse.net",
+                    domain=".myanonamouse.net",
                     path="/",
                     secure=True,
                 )
@@ -124,6 +141,11 @@ class MamClient:
                 timeout=20,
                 allow_redirects=False,
             )
+
+            for cookie in response.cookies:
+                if cookie.name == "mam_id":
+                    keep_mam_cookie(session.cookies, cookie)
+
             jar.clear()
             for cookie in session.cookies:
                 jar.set_cookie(cookie)
@@ -148,8 +170,8 @@ class QbtClient:
         self.username = username
         self.password = password
 
-    def fetch(self, previous: dict[str, Any], now: float) -> dict[str, Any]:
-        """Return a complete snapshot or fail without declaring torrents missing."""
+    def fetch(self, now: float) -> dict[str, Any]:
+        """Return a complete snapshot of current MAM torrents."""
         deadline = time.monotonic() + 120
         with Session() as session:
             session.trust_env = False
@@ -209,7 +231,6 @@ class QbtClient:
                     files,
                     trackers,
                     preferences,
-                    previous.get(torrent_hash, {}),
                     now,
                 )
             return result

@@ -23,9 +23,7 @@ the secret. Do not put the session in Git, chat, logs, or command arguments.
 The configured session is not copied to a separate credential file. Server cookie
 rotations are stored privately in `/data/mam/cookies.txt` (mode 0600, directory
 0700). Changing the configured session resets those cookies on its next scheduled
-poll. Authentication errors block further MAM requests with that credential.
-Cooldowns and backoff survive restarts; deleting runtime state is not an
-appropriate retry mechanism.
+poll. Only the current MAM session cookie is sent, including when its domain scope changes during rotation. Authentication errors use the normal exponential polling backoff, capped at six hours, and a successful retry restores account data automatically. Cooldowns and backoff survive restarts; deleting runtime state is not an appropriate retry mechanism.
 
 `input_number.mam_download_reserve_gib` controls the spare credit in GiB. The app
 initializes a new zero-valued helper to 2 once and persists that initialization.
@@ -39,13 +37,7 @@ age is not documented. Unknown classes have an unavailable limit.
 
 ## Tracker response fields
 
-`response_paths` maps verified `jsonLoad.php` fields. Unsatisfied count and limit
-come from `unsat.count` and `unsat.limit`; satisfied totals combine `sSat` and
-`inactSat`. Seeding totals combine `sSat`, `seedUnsat`, `seedHnr`, and `upAct`.
-Hit-and-run totals combine `seedHnr` and `inactHnr`. Nested lists of paths sum
-these disjoint categories only when every count is valid. Missing data remains
-unknown rather than silently becoming zero. Category `red` flags are not counts
-and do not create alerts on their own.
+`response_paths` maps verified `jsonLoad.php` fields. Tracker statistics live under `snatch_summary`: unsatisfied count and limit use `unsat.count` and `unsat.limit`; satisfied totals combine `sSat` and `inactSat`; seeding totals combine `sSat`, `seedUnsat`, `seedHnr` and `upAct`. Hit-and-run totals combine `seedHnr` and `inactHnr`. Nested lists of paths sum these disjoint categories only when every count is valid. Missing data remains unknown rather than silently becoming zero. Category `red` flags are not counts and do not create alerts on their own.
 
 Connectivity accepts JSON booleans or MAM's `yes`/`no` strings. Notification
 counters are restricted to private messages, clients about to be dropped,
@@ -66,19 +58,9 @@ and the configurable reserve. Outstanding freeleech downloads are conservatively
 counted because their status is unverified. Tracker reporting delay can make this
 estimate optimistic after a transfer completes; it is not permission to download.
 
-Every file must be complete, including skipped covers and supplemental files,
-before local completed-seeding progress is displayed. Seeding hours come from
-qBittorrent, not the tracker. Counter resets require verification. The estimated
-30-day deadline uses the local added timestamp and can differ from MAM's snatch
-time. Missing timestamps remain unknown. `stalledUP` with a working MAM tracker
-is normal seeding; connectability is not evidence of seed-time credit.
+The collector checks every torrent file for completion and skipped files, plus current client state, tracker health and retention limits. `stalledUP` with a working MAM tracker is normal seeding. Obligation counts come from MAM's account response; connectability is not evidence of seed-time credit.
 
-Tracker matching uses exact domain boundaries across every torrent's tracker list,
-independent of its category. Snapshot failure does not mark torrents deleted.
-Disappeared torrents with an unresolved local obligation remain in durable state.
-All observed torrents contribute to totals and checks; the attention-first detail
-payload is bounded to 200 entries and explicitly reports truncation. Missing
-entries require manual verification; the monitor cannot certify their satisfaction.
+Tracker matching uses exact domain boundaries across every torrent's tracker list, independent of its category. Each successful client poll replaces the current torrent snapshot. All observed torrents contribute to totals and checks; the attention-first detail payload is bounded to 200 entries and explicitly reports truncation.
 
 MAM data expires after 90 minutes and client data after 15 minutes. Authentication
 failures invalidate account data immediately. MQTT last-will and 180-second entity
