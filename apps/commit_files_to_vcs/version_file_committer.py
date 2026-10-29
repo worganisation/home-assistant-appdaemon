@@ -12,7 +12,7 @@ from github.Auth import Token
 if TYPE_CHECKING:
     from github.Repository import Repository
 
-REPO_NAME: Final[str] = "worgarside/home-assistant"
+REPO_NAME: Final[str] = "worganisation/home-assistant"
 
 
 class VersionFileCommitter(Hass):

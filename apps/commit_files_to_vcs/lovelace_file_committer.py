@@ -27,7 +27,7 @@ def stable_int_id(value: str) -> int:
     return int.from_bytes(digest, "big") & 0x7FFFFFFFFFFFFFFF
 
 
-REPO_NAME: Final[str] = "worgarside/home-assistant"
+REPO_NAME: Final[str] = "worganisation/home-assistant"
 
 
 class LovelaceFileCommitter(Hass):
