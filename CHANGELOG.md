@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.38.3 (2026-10-29)
+
+### Bug Fixes
+
+- Target transferred Home Assistant repository in committers
+  ([#348](https://github.com/worganisation/home-assistant-appdaemon/pull/348),
+  [`79c8872`](https://github.com/worganisation/home-assistant-appdaemon/commit/79c8872635832f0e66fc0d852c9391280e099c35))
+
+
 ## v0.38.2 (2026-10-27)
 
 ### Bug Fixes
