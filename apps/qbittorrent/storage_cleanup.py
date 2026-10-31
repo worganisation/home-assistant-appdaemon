@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import sqlite3
 from dataclasses import dataclass
 from re import compile as compile_regex
-from time import monotonic
+from time import monotonic, time
 from typing import TYPE_CHECKING, Any, Final
 
 from appdaemon.plugins.hass.hassapi import Hass
 from mam.model import is_mam_tracker
+from qbittorrent.activity import SAMPLE_INTERVAL, ActivityHistory
 from requests import RequestException, Response, Session
 
 if TYPE_CHECKING:
@@ -26,19 +28,16 @@ class QbittorrentError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class TorrentCandidate:
-    """A seeding torrent and its progress towards cleanup ranking targets."""
+    """An eligible seeder ranked by recent upload productivity."""
 
     hash: str
     name: str
     size: int
     ratio: float
-    ratio_target: float
     upload_speed: int
     seeding_seconds: int
-    time_target_seconds: float
-    closeness: float
-    deletion_score: float
-    closest_target: str
+    productivity: float
+    last_activity: float
 
     @property
     def size_formatted(self) -> str:
@@ -50,15 +49,6 @@ class TorrentCandidate:
                 return f"{amount:.{precision}f} {unit}"
             amount /= BYTES_PER_UNIT
         return f"{self.size} B"
-
-    @property
-    def target_summary(self) -> str:
-        """Describe the ranking target that puts the torrent highest."""
-        progress = f"{self.closeness * 100:.1f}%"
-        if self.closest_target == "ratio":
-            return f"{progress} of the {self.ratio_target:g} ratio ranking target"
-        days = self.time_target_seconds / SECONDS_PER_DAY
-        return f"{progress} of the {days:g}-day seeding ranking target"
 
     @property
     def is_uploading(self) -> bool:
@@ -75,18 +65,26 @@ class QbittorrentWebApi:
         username: str,
         password: str,
         *,
-        ratio_progress_weight: float,
-        ratio_target: float,
-        seeding_days_target: float,
+        history: ActivityHistory,
         timeout: float,
     ) -> None:
         self.base_url = base_url.rstrip("/")
         self.username = username
         self.password = password
-        self.ratio_progress_weight = ratio_progress_weight
-        self.ratio_target = ratio_target
-        self.seeding_days_target = seeding_days_target
+        self.history = history
         self.timeout = timeout
+
+    def sample_activity(self) -> None:
+        """Observe all torrents, including paused seeders, every sampling interval."""
+        with self._authenticated_session() as session:
+            torrents = self._json_list(
+                self._request(session, "GET", "/api/v2/torrents/info"),
+            )
+
+        rank_seeders(torrents, history=self.history)
+        self.history.retain(
+            {str(torrent.get("hash", "")).lower() for torrent in torrents},
+        )
 
     def ranked_seeders(self) -> list[TorrentCandidate]:
         """Return eligible seeders after checking every configured tracker."""
@@ -101,9 +99,7 @@ class QbittorrentWebApi:
             )
             ranked = rank_seeders(
                 torrents,
-                ratio_progress_weight=self.ratio_progress_weight,
-                ratio_target=self.ratio_target,
-                seeding_days_target=self.seeding_days_target,
+                history=self.history,
             )
             deadline = monotonic() + 120
             eligible: list[TorrentCandidate] = []
@@ -142,9 +138,7 @@ class QbittorrentWebApi:
             )
             refreshed = rank_seeders(
                 torrents,
-                ratio_progress_weight=self.ratio_progress_weight,
-                ratio_target=self.ratio_target,
-                seeding_days_target=self.seeding_days_target,
+                history=self.history,
             )
             candidate = next(
                 (item for item in refreshed if item.hash == torrent_hash),
@@ -272,50 +266,47 @@ def _as_int(value: Any, default: int = 0) -> int:
 def rank_seeders(
     torrents: list[dict[str, Any]],
     *,
-    ratio_progress_weight: float = 1.0,
-    ratio_target: float = 5.0,
-    seeding_days_target: float = 28.0,
+    history: ActivityHistory,
 ) -> list[TorrentCandidate]:
-    """Rank safe seeders by ratio and seeding time, independent of client limits."""
-    time_target_seconds = seeding_days_target * SECONDS_PER_DAY
-
+    """Observe complete torrents and rank eligible ones by upload per byte stored."""
+    now = time()
     ranked: list[TorrentCandidate] = []
     for torrent in torrents:
         torrent_hash = str(torrent.get("hash", "")).lower()
         if not TORRENT_HASH_PATTERN.fullmatch(torrent_hash):
             continue
-        if str(torrent.get("category", "")).lower() == "shelfarr":
+
+        if _as_float(torrent.get("progress")) < 1:
+            history.forget(torrent_hash)
             continue
-        ratio = max(_as_float(torrent.get("ratio")), 0.0)
-        seeding_seconds = max(_as_int(torrent.get("seeding_time")), 0)
-        ratio_progress = ratio / ratio_target
-        time_progress = seeding_seconds / time_target_seconds
-        weighted_ratio_progress = ratio_progress * ratio_progress_weight
-        ratio_is_closer = weighted_ratio_progress >= time_progress
-        closest_target = "ratio" if ratio_is_closer else "time"
+
+        size = _as_int(torrent.get("total_size", torrent.get("size", 0)))
+        activity = history.observe(
+            torrent_hash,
+            uploaded=_as_int(torrent.get("uploaded"), -1),
+            completion=_as_int(torrent.get("completion_on")),
+            size=size,
+            now=now,
+        )
+        if activity is None or str(torrent.get("category", "")).lower() == "shelfarr":
+            continue
+
         ranked.append(
             TorrentCandidate(
                 hash=torrent_hash,
                 name=str(torrent.get("name", "Unknown torrent")),
-                size=max(
-                    _as_int(torrent.get("size", torrent.get("total_size", 0))),
-                    0,
-                ),
-                ratio=ratio,
-                ratio_target=ratio_target,
+                size=size,
+                ratio=max(_as_float(torrent.get("ratio")), 0.0),
                 upload_speed=max(_as_int(torrent.get("upspeed")), 0),
-                seeding_seconds=seeding_seconds,
-                time_target_seconds=time_target_seconds,
-                closeness=ratio_progress if ratio_is_closer else time_progress,
-                deletion_score=max(weighted_ratio_progress, time_progress),
-                closest_target=closest_target,
+                seeding_seconds=max(_as_int(torrent.get("seeding_time")), 0),
+                productivity=activity.productivity,
+                last_activity=activity.last_activity,
             ),
         )
 
     return sorted(
         ranked,
-        key=lambda item: (item.deletion_score, item.seeding_seconds, item.ratio),
-        reverse=True,
+        key=lambda item: (item.productivity, item.last_activity, -item.size, item.hash),
     )
 
 
@@ -344,15 +335,7 @@ class QbittorrentStorageCleanup(Hass):
             str(self.args["qbittorrent_url"]),
             str(self.args["qbittorrent_username"]),
             str(self.args["qbittorrent_password"]),
-            ratio_progress_weight=max(
-                float(self.args.get("ratio_progress_weight", 1.0)),
-                0.0,
-            ),
-            ratio_target=max(float(self.args.get("ratio_target", 5.0)), 0.01),
-            seeding_days_target=max(
-                float(self.args.get("seeding_days_target", 28.0)),
-                0.01,
-            ),
+            history=ActivityHistory(str(self.args["activity_database"])),
             timeout=float(self.args.get("request_timeout", 15)),
         )
         self._threshold_active = False
@@ -366,10 +349,19 @@ class QbittorrentStorageCleanup(Hass):
             self._notification_action,
             "mobile_app_notification_action",
         )
-        self.run_in(self._startup_check, 1)
+        self.run_every(self._sample_and_retry, "now+1", SAMPLE_INTERVAL)
 
-    def _startup_check(self, _kwargs: dict[str, Any]) -> None:
-        """Offer cleanup after reload when storage is already over the threshold."""
+    def _sample_and_retry(self, _kwargs: dict[str, Any]) -> None:
+        """Persist activity and retry cleanup while storage remains above threshold."""
+        try:
+            self.client.sample_activity()
+        except (QbittorrentError, OSError, sqlite3.Error) as error:
+            self.error("Unable to sample qBittorrent activity: %s", error)
+            return
+
+        if self._post_delete_check_pending:
+            return
+
         usage = self._usage(self.get_state(self.storage_entity))
         if usage is not None and usage >= self._current_threshold():
             self._threshold_active = True
@@ -447,7 +439,7 @@ class QbittorrentStorageCleanup(Hass):
         """Find the highest ranked torrent and request or perform deletion."""
         try:
             ranked = self.client.ranked_seeders()
-        except QbittorrentError as error:
+        except (QbittorrentError, OSError, sqlite3.Error) as error:
             self.error("Unable to rank qBittorrent seeders: %s", error)
             self._notify(
                 title="qBittorrent cleanup unavailable",
@@ -461,7 +453,8 @@ class QbittorrentStorageCleanup(Hass):
                 title="qBittorrent storage full",
                 message=(
                     f"Storage is at {usage:.1f}%, but there are no seeding torrents "
-                    "eligible for cleanup."
+                    "eligible for cleanup. Activity and observation grace periods are "
+                    "respected; cleanup will retry in five minutes."
                 ),
                 icon="mdi:harddisk-alert",
             )
@@ -491,7 +484,7 @@ class QbittorrentStorageCleanup(Hass):
                 f"{candidate.name}\n"
                 f"Size: {candidate.size_formatted}\n"
                 f"Ratio: {candidate.ratio:.2f}\n"
-                f"Ranking: {candidate.target_summary}"
+                f"Recent upload: {candidate.productivity:.3f} GB per GB stored per day"
             ),
             icon="mdi:harddisk-remove",
             actions=[
@@ -502,12 +495,11 @@ class QbittorrentStorageCleanup(Hass):
             ],
         )
         self.log(
-            "Offered deletion of %s (%s, ratio %.2f, %.1f%% towards %s target)",
+            "Offered deletion of %s (%s, ratio %.2f, productivity %.3f/day)",
             candidate.name,
             candidate.size_formatted,
             candidate.ratio,
-            candidate.closeness * 100,
-            candidate.closest_target,
+            candidate.productivity,
         )
 
     def _auto_mode(self) -> bool:
@@ -559,7 +551,7 @@ class QbittorrentStorageCleanup(Hass):
 
         try:
             ranked = self.client.ranked_seeders()
-        except QbittorrentError as error:
+        except (QbittorrentError, OSError, sqlite3.Error) as error:
             self.error("Unable to delete qBittorrent torrent: %s", error)
             self._notify(
                 title="Torrent was not deleted",
@@ -601,7 +593,7 @@ class QbittorrentStorageCleanup(Hass):
                 candidate.hash,
                 can_delete=lambda: self._ready_to_delete(automatic=automatic),
             )
-        except QbittorrentError as error:
+        except (QbittorrentError, OSError, sqlite3.Error) as error:
             self.error("Unable to delete qBittorrent torrent: %s", error)
             self._notify(
                 title="Torrent was not deleted",
@@ -681,7 +673,7 @@ class QbittorrentStorageCleanup(Hass):
         """Restart errored torrents after deleting scratch-storage content."""
         try:
             restarted = self.client.restart_errored()
-        except QbittorrentError as error:
+        except (QbittorrentError, OSError, sqlite3.Error) as error:
             self.error("Unable to restart errored qBittorrent torrents: %s", error)
             self._notify(
                 title="Torrents were not restarted",
