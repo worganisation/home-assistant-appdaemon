@@ -321,10 +321,12 @@ def _check_response(response: httpx2.Response) -> None:
         response.raise_for_status()
 
     response.read()
-    if (_page_title(response.text) or "").casefold() == (
-        "services unavailable - student loans company"
-    ):
-        raise SlcTemporaryError("Services unavailable - Student Loans Company")
+    if (title := _page_title(response.text) or "").casefold() in {
+        "services unavailable - student loans company",
+        "this service is undergoing maintenance and is currently unavailable "
+        "- student loans company",
+    }:
+        raise SlcTemporaryError(title)
 
 
 def _client() -> httpx2.Client:

@@ -486,6 +486,8 @@ class SlcBalance(hass.Hass):
             return
 
         attributes: dict[str, Any] = {
+            "friendly_name": "SLC Status",
+            "icon": "mdi:school-outline",
             "last_updated": datetime.now(UTC).isoformat(),
         }
         if summary is not None:
