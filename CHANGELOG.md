@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.39.0 (2026-11-08)
+
+### Features
+
+- Retain productive torrents with persistent upload history
+  ([#349](https://github.com/worganisation/home-assistant-appdaemon/pull/349),
+  [`9dba728`](https://github.com/worganisation/home-assistant-appdaemon/commit/9dba72823317c5faa64284b3fea26eee0ed85a3c))
+
+
 ## v0.38.3 (2026-10-29)
 
 ### Bug Fixes
