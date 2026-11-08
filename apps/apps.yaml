@@ -60,9 +60,7 @@ qbittorrent_storage_cleanup:
   threshold: 99.9
   reset_below: 98.0
   post_delete_check_delay: 90
-  ratio_progress_weight: 1.25  # Makes ratio 4/5 tie with time 28/28 days.
-  ratio_target: 5
-  seeding_days_target: 28
+  activity_database: /data/qbittorrent/activity.sqlite3
   request_timeout: 15
 
   qbittorrent_url: !secret qbittorrent_url
