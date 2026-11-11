@@ -321,10 +321,12 @@ def _check_response(response: httpx2.Response) -> None:
         response.raise_for_status()
 
     response.read()
-    if (_page_title(response.text) or "").casefold() == (
-        "services unavailable - student loans company"
-    ):
-        raise SlcTemporaryError("Services unavailable - Student Loans Company")
+    if (title := _page_title(response.text) or "").casefold() in {
+        "services unavailable - student loans company",
+        "this service is undergoing maintenance and is currently unavailable "
+        "- student loans company",
+    }:
+        raise SlcTemporaryError(title)
 
 
 def _client() -> httpx2.Client:
@@ -387,6 +389,18 @@ def _open_login_page(client: httpx2.Client) -> httpx2.Response:
             "ors-chapter": "",
         },
     )
+    if (
+        login.url.path
+        == "/ors/how-did-you-previously-log-into-your-student-finance-account"
+    ):
+        fields = _extract_inputs(login.text)
+        fields["loginMethod"] = "OKTA"
+        fields["ors-chapter"] = ""
+        login = client.post(
+            _first_form_action(login.text, str(login.url)),
+            data=fields,
+        )
+
     if "userId" not in login.text or "_csrf" not in login.text:
         raise SlcError(
             f"Did not reach SLC login form "
