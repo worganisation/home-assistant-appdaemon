@@ -389,7 +389,10 @@ def _open_login_page(client: httpx2.Client) -> httpx2.Response:
             "ors-chapter": "",
         },
     )
-    if login.url.path == "/ors/how-did-you-previously-log-into-your-student-finance-account":
+    if (
+        login.url.path
+        == "/ors/how-did-you-previously-log-into-your-student-finance-account"
+    ):
         fields = _extract_inputs(login.text)
         fields["loginMethod"] = "OKTA"
         fields["ors-chapter"] = ""
