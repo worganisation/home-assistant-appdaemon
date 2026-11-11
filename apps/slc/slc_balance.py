@@ -503,7 +503,7 @@ class SlcBalance(hass.Hass):
         if error:
             attributes["error"] = error
 
-        self.set_state(self.raw_sensor, state=state, attributes=attributes)
+        self.set_state(self.raw_sensor, state=state, attributes=attributes, replace=True)
 
     def _notify_failure(self, message: str) -> None:
         """Notify once about an authentication, HTTP, or page parsing failure."""
