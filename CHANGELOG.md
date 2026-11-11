@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.39.1 (2026-11-11)
+
+### Bug Fixes
+
+- Handle SLC login selection and maintenance status
+  ([#350](https://github.com/worganisation/home-assistant-appdaemon/pull/350),
+  [`3591060`](https://github.com/worganisation/home-assistant-appdaemon/commit/3591060ef53b037e5c6bfb38b408c03ed7ccca6e))
+
+
 ## v0.39.0 (2026-11-08)
 
 ### Features
