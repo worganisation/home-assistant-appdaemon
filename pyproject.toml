@@ -17,7 +17,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-  "appdaemon==4.5.13",
+  "appdaemon==4.5.16",
   "basedpyright>=1.39.7",
 ]
 
