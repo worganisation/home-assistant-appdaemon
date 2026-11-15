@@ -4,11 +4,16 @@
 
 from __future__ import annotations
 
+import asyncio
 import unittest
-from typing import Literal
+from typing import TYPE_CHECKING, Literal, cast
+from unittest.mock import AsyncMock
 
 from statistics_manager.api import HomeAssistant
 from statistics_manager.model import Policy, Record
+
+if TYPE_CHECKING:
+    from appdaemon.plugins.hass.hassplugin import HassPlugin
 
 
 class FlowAPI(HomeAssistant):
@@ -54,6 +59,17 @@ def options(**overrides: object) -> Record:
 
 class FlowTests(unittest.IsolatedAsyncioTestCase):
     """Exercise creation, no-op options and source updates through the native flow."""
+
+    async def test_plugin_shutdown_propagates_cancellation(self) -> None:
+        """Let app termination finish when the HASS plugin consumes cancellation."""
+        plugin = AsyncMock()
+        plugin.websocket_send_json.return_value = {
+            "success": False,
+            "ad_status": "TERMINATING",
+        }
+        api = HomeAssistant(cast("HassPlugin", plugin))
+        with self.assertRaises(asyncio.CancelledError):
+            await api.ws("get_states")
 
     async def test_three_step_creation(self) -> None:
         """Submit each stage independently and retain the returned config-entry ID."""

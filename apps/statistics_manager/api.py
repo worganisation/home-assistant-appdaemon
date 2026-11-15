@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Literal
 
 from .model import Policy, Record, Snapshot, record, text
@@ -28,6 +29,9 @@ class HomeAssistant:
             **data,
         )
         result = record(response)
+        if result.get("ad_status") == "TERMINATING":
+            raise asyncio.CancelledError
+
         if result.get("success") is not True:
             raise RuntimeError(f"Home Assistant command failed: {command}")
         return result.get("result")
