@@ -45,5 +45,5 @@ Recorder must retain and record the source readings for historical restoration. 
 Run the lifecycle tests with Python 3.13:
 
 ```fish
-env PYTHONPATH=apps python -m unittest discover -s tests -p test_statistics_manager.py -v
+env PYTHONPATH=apps python -m unittest discover -s tests -p 'test_statistics_*.py' -v
 ```

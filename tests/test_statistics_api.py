@@ -71,6 +71,22 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(asyncio.CancelledError):
             await api.ws("get_states")
 
+    async def test_home_assistant_startup_waits_for_running(self) -> None:
+        """Reject startup discovery and accept the authoritative reconnect snapshot."""
+        plugin = AsyncMock()
+        plugin.websocket_send_json.side_effect = [
+            {"success": True, "result": {"state": "STARTING"}},
+            {"success": True, "result": {"state": "RUNNING"}},
+            *[{"success": True, "result": []} for _ in range(4)],
+        ]
+        api = HomeAssistant(cast("HassPlugin", plugin))
+        with self.assertRaises(RuntimeError):
+            await api.snapshot()
+
+        snapshot = await api.snapshot()
+        self.assertEqual(snapshot.entities, {})
+        self.assertEqual(plugin.websocket_send_json.await_count, 6)
+
     async def test_three_step_creation(self) -> None:
         """Submit each stage independently and retain the returned config-entry ID."""
         api = FlowAPI(

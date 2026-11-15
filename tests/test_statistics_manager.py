@@ -308,6 +308,28 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             await self.manager.reconcile()
         self.assertEqual(len(self.api.entries), 1)
 
+    async def test_readded_label_is_rechecked_before_deletion(self) -> None:
+        """Protect a helper when a label is restored after an earlier discovery."""
+        await self.manager.reconcile()
+        entry = self.api.entries[0].copy()
+        self.api.entities[0]["labels"] = []
+        await self.api.snapshot()
+        self.api.entities[0]["labels"] = ["label-1"]
+
+        result = await self.manager.remove("source-1", entry, "label-1")
+        self.assertEqual(result, [])
+        self.assertEqual(len(self.api.entries), 1)
+
+    async def test_ambiguous_ownership_requires_resolution(self) -> None:
+        """Avoid choosing between two native entries claiming the same source."""
+        await self.manager.reconcile()
+        await self.api.create(Policy(), "source-1", "sensor.temperature")
+
+        with self.assertRaises(ValueError):
+            await self.manager.reconcile()
+
+        self.assertEqual(len(self.api.entries), 2)
+
 
 if __name__ == "__main__":
     unittest.main()
