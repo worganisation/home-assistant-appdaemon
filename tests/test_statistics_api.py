@@ -63,7 +63,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
                 form("state_characteristic"),
                 form("options"),
                 {"type": "create_entry", "result": {"entry_id": "entry"}},
-            ]
+            ],
         )
         entry_id = await api.create(Policy(), "stable-source", "sensor.test")
         self.assertEqual(entry_id, "entry")
@@ -77,7 +77,7 @@ class FlowTests(unittest.IsolatedAsyncioTestCase):
     async def test_healthy_options_are_read_without_reload(self) -> None:
         """Abort an unchanged options flow, accepting equivalent duration units."""
         api = FlowAPI(
-            [options(max_age={"days": 3, "hours": 0}), {"message": "Flow aborted"}]
+            [options(max_age={"days": 3, "hours": 0}), {"message": "Flow aborted"}],
         )
         self.assertFalse(await api.configure(Policy(), "entry", "sensor.test"))
         self.assertEqual(api.calls[-1][0], "delete")
