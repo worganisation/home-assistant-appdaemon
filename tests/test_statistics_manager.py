@@ -144,6 +144,19 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.api.deletes, 1)
         self.assertEqual(self.manager.store.data["helpers"], {})
 
+    async def test_device_prefixed_generated_id_is_named_once(self) -> None:
+        """Normalize device-prefixed native IDs and preserve subsequent custom IDs."""
+        await self.api.create(Policy(), "source-1", "sensor.temperature")
+        self.api.entities[1]["entity_id"] = "sensor.office_appdaemon_statistics_1"
+
+        await self.manager.reconcile()
+        self.assertEqual(self.api.entities[1]["entity_id"], "sensor.temperature_72h_change")
+
+        self.api.entities[1]["entity_id"] = "sensor.custom_trend"
+        await self.manager.reconcile()
+        self.assertEqual(self.api.entities[1]["entity_id"], "sensor.custom_trend")
+        self.assertEqual(self.api.creates, 1)
+
     async def test_recovers_lost_creation_response_and_mapping(self) -> None:
         """Adopt an existing helper after transport or local storage loss."""
         self.api.lose_create_response = True

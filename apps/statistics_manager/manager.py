@@ -131,7 +131,7 @@ class Manager:
                 entry_id=text(entry, "entry_id"),
                 title=name,
             )
-        if text(helper, "entity_id").startswith("sensor.appdaemon_statistics_"):
+        if "appdaemon_statistics_" in text(helper, "entity_id"):
             proposed = f"{source['entity_id']}_{self.policy.hours}h_change"
             if proposed not in {row["entity_id"] for row in snapshot.entities.values()}:
                 await self.api.ws(
