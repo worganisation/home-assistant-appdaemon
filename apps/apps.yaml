@@ -1,5 +1,18 @@
 ---
 
+# Native Statistics helpers
+
+statistics_sensor_manager:
+  module: statistics_manager.app
+  class: StatisticsSensorManager
+  label: trend72Hours
+  policy_id: change72h
+  hours: 72
+  precision: 2
+  reconcile_interval: 3600
+  debounce: 2
+  storage_path: /data/statistics_manager/ownership.json
+
 # AppDaemon Updater
 
 appdaemon_updater:
