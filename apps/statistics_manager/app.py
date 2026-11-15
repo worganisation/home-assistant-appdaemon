@@ -37,6 +37,10 @@ class StatisticsSensorManager(Hass):
         )
         self.interval = float(self.args.get("reconcile_interval", 3600))
         self.debounce = float(self.args.get("debounce", 2))
+        self.minimum_coverage = float(self.args.get("minimum_coverage", 0.8))
+        self.last_success = ""
+        if not 0 <= self.minimum_coverage <= 1:
+            raise ValueError("Minimum coverage must be between zero and one")
         if self.interval <= 0 or self.debounce <= 0:
             raise ValueError("Reconciliation and debounce intervals must be positive")
         self.manager = Manager(
@@ -70,9 +74,9 @@ class StatisticsSensorManager(Hass):
             await cast("Awaitable[str]", self.listen_event(self.changed, event))
         self.worker = asyncio.create_task(self.run())
 
-    def changed(self, event: str, data: dict[str, object], **kwargs: object) -> None:
+    def changed(self, event_type: str, data: dict[str, object], **kwargs: object) -> None:
         """Coalesce callbacks without performing network work on callback threads."""
-        del event, data, kwargs
+        del event_type, data, kwargs
         self.loop.call_soon_threadsafe(self.wake.set)
 
     async def run(self) -> None:
@@ -83,6 +87,8 @@ class StatisticsSensorManager(Hass):
             try:
                 result = await self.manager.reconcile()
                 failures = failures + 1 if result["warnings"] else 0
+                if not failures:
+                    self.last_success = datetime.now(UTC).isoformat()
                 await cast(
                     "Awaitable[object]",
                     self.set_state(
@@ -90,8 +96,8 @@ class StatisticsSensorManager(Hass):
                         state="warning" if result["warnings"] else "ok",
                         attributes={
                             **result,
-                            "last_success": datetime.now(UTC).isoformat(),
-                            "minimum_coverage": 0.8,
+                            "last_success": self.last_success,
+                            "minimum_coverage": self.minimum_coverage,
                         },
                     ),
                 )
