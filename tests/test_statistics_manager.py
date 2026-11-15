@@ -151,7 +151,8 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
 
         await self.manager.reconcile()
         self.assertEqual(
-            self.api.entities[1]["entity_id"], "sensor.temperature_72h_change",
+            self.api.entities[1]["entity_id"],
+            "sensor.temperature_72h_change",
         )
 
         self.api.entities[1]["entity_id"] = "sensor.custom_trend"
