@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.40.2 (2026-11-22)
+
+### Bug Fixes
+
+- **statistics**: Finish shutdown when AppDaemon consumes cancellation
+  ([#356](https://github.com/worganisation/home-assistant-appdaemon/pull/356),
+  [`5490f48`](https://github.com/worganisation/home-assistant-appdaemon/commit/5490f480bae23404120794083e8b111ca6025b65))
+
+
 ## v0.40.1 (2026-11-22)
 
 ### Bug Fixes
