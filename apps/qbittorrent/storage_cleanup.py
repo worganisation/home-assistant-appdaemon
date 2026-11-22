@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING, Any, Final
 
 from appdaemon.plugins.hass.hassapi import Hass
 from mam.model import is_mam_tracker
-from qbittorrent.activity import SAMPLE_INTERVAL, ActivityHistory
 from requests import RequestException, Response, Session
+
+from qbittorrent.activity import SAMPLE_INTERVAL, ActivityHistory
 
 if TYPE_CHECKING:
     from collections.abc import Callable

@@ -1,4 +1,4 @@
-"""Persist upload observations used to retain productive torrents."""
+"""Persist cumulative upload observations across gaps for seeder retention."""
 
 from __future__ import annotations
 
