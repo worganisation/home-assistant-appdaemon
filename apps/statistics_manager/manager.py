@@ -29,8 +29,19 @@ class Manager:
         self.dry_run = dry_run
         self.lock = asyncio.Lock()
 
-    async def label(self, snapshot: Snapshot) -> str:
-        """Retain a label's stable identity when its display name changes."""
+    async def label(self, snapshot: Snapshot, *, has_owned_helpers: bool) -> str:
+        """Resolve the selection label and create it only for an empty policy.
+
+        Args:
+            snapshot: Current Home Assistant registry snapshot.
+            has_owned_helpers: Whether this policy already owns native helpers.
+
+        Returns:
+            The selection label's registry ID.
+
+        Raises:
+            ValueError: The label is missing or ambiguous, or creation is disabled.
+        """
         saved = self.store.data.get("label_id")
         if isinstance(saved, str):
             if saved not in snapshot.labels:
@@ -47,6 +58,10 @@ class Manager:
             raise ValueError("Selection label name is ambiguous")
         if matching:
             return matching[0]
+        if has_owned_helpers:
+            raise ValueError(
+                "Selection label missing for owned helpers; cleanup suspended",
+            )
         if self.dry_run:
             raise ValueError("Selection label is absent in dry-run mode")
         result = record(
@@ -164,8 +179,8 @@ class Manager:
         """Isolate source failures and retain successful changes from the same pass."""
         async with self.lock:
             snapshot = await self.api.snapshot()
-            label_id = await self.label(snapshot)
             owned = snapshot.owned(self.policy)
+            label_id = await self.label(snapshot, has_owned_helpers=bool(owned))
             desired = {
                 key
                 for key, source in snapshot.entities.items()

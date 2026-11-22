@@ -20,7 +20,7 @@ statistics_sensor_manager:
   dry_run: false
 ```
 
-The manager creates the selection label when initially absent, then persists its actual registry ID. Label display-name changes retain that identity. Deleting the selection label is unsupported; a missing saved label suspends cleanup. `manager_id` defaults to the AppDaemon application name and forms part of stable ownership identity. Keep it and `policy_id` stable across deployments.
+The manager creates a missing selection label only when the policy has no saved label ID and owns no native helpers. It persists the label's actual registry ID, which survives display-name changes. Deleting the selection label is unsupported. If the saved label is missing, or owned helpers exist and the selection label cannot be recovered by name, the manager suspends cleanup. `manager_id` defaults to the AppDaemon application name and forms part of stable ownership identity. Keep it and `policy_id` stable across deployments.
 
 The Statistics characteristic is `change`: newest sample minus oldest sample in the window. The buffer has a maximum age and no sample-count cap. Precision defaults to two decimals and `keep_last_sample` is false. A moisture difference is in percentage points, not a relative percentage change.
 
