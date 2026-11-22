@@ -42,8 +42,24 @@ class HomeAssistant:
         path: str,
         **data: object,
     ) -> Record:
-        """Reject timeouts and HTTP failures without repeating a possibly committed write."""
+        """Read a native REST result and propagate shutdown cancellation.
+
+        Args:
+            method: HTTP method for the native call.
+            path: Home Assistant API path.
+            **data: Request fields forwarded to AppDaemon.
+
+        Returns:
+            The response object returned by Home Assistant.
+
+        Raises:
+            asyncio.CancelledError: The worker was cancelled during the request.
+            TypeError: AppDaemon returned a non-object response.
+        """
         response = await self.plugin.http_method(method, path, timeout=30, **data)
+        if (task := asyncio.current_task()) is not None and task.cancelling():
+            raise asyncio.CancelledError
+
         return record(response)
 
     async def snapshot(self) -> Snapshot:
