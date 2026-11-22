@@ -2,6 +2,15 @@
 
 <!-- version list -->
 
+## v0.40.1 (2026-11-22)
+
+### Bug Fixes
+
+- **qbittorrent**: Track upload-history changes for app reload
+  ([#355](https://github.com/worganisation/home-assistant-appdaemon/pull/355),
+  [`f4997aa`](https://github.com/worganisation/home-assistant-appdaemon/commit/f4997aa8c046909a1ba06bdbd5b39ec2fd39e472))
+
+
 ## v0.40.0 (2026-11-22)
 
 ### Bug Fixes
