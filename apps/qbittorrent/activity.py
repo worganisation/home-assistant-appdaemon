@@ -10,7 +10,7 @@ from pathlib import Path
 
 DAY = 86400
 SAMPLE_INTERVAL = 300
-MAX_SAMPLE_GAP = SAMPLE_INTERVAL * 3
+MAX_INTERPOLATION_GAP = SAMPLE_INTERVAL * 3
 MEANINGFUL_BYTES = 1024 * 1024
 ACTIVITY_GRACE = 2 * 3600
 
@@ -24,12 +24,21 @@ class Activity:
 
 
 def uploaded_since(samples: list[tuple[float, int]], cutoff: float) -> float:
-    """Estimate window uploads by interpolating the boundary sample."""
+    """Estimate uploads in a window ending at the latest sample.
+
+    Args:
+        samples: Chronologically ordered timestamps and cumulative upload counters.
+        cutoff: Start of the window as a Unix timestamp.
+
+    Returns:
+        Bytes uploaded in the window, counting uploads across a long gap at
+        the first sample after the gap.
+    """
     baseline = float(samples[0][1])
     for previous, current in pairwise(samples):
         if current[0] <= cutoff:
             baseline = float(current[1])
-        elif previous[0] < cutoff:
+        elif previous[0] < cutoff and current[0] - previous[0] <= MAX_INTERPOLATION_GAP:
             fraction = (cutoff - previous[0]) / (current[0] - previous[0])
             baseline = previous[1] + fraction * (current[1] - previous[1])
             break
@@ -40,7 +49,7 @@ def uploaded_since(samples: list[tuple[float, int]], cutoff: float) -> float:
 
 
 class ActivityHistory:
-    """Store continuous counter history without treating outages as inactivity."""
+    """Persist cumulative upload counters across sampling gaps."""
 
     def __init__(self, path: str) -> None:
         self.path = Path(path)
@@ -62,7 +71,19 @@ class ActivityHistory:
         size: int,
         now: float,
     ) -> Activity | None:
-        """Record a counter and return a score only after both grace periods."""
+        """Record an upload counter and evaluate the seeding grace periods.
+
+        Args:
+            torrent_hash: Info hash of the torrent.
+            uploaded: Cumulative bytes uploaded.
+            completion: Completion time as a Unix timestamp.
+            size: Torrent size in bytes.
+            now: Observation time as a Unix timestamp.
+
+        Returns:
+            Activity score and last meaningful upload time when both grace
+            periods have elapsed, or None while the torrent is protected.
+        """
         if uploaded < 0 or completion <= 0 or completion > now or size <= 0:
             self.forget(torrent_hash)
             return None
@@ -83,7 +104,7 @@ class ActivityHistory:
                 state is None
                 or not samples
                 or int(state[1]) != completion
-                or not 0 <= now - samples[-1][0] <= MAX_SAMPLE_GAP
+                or now < samples[-1][0]
                 or uploaded < samples[-1][1]
             ):
                 connection.execute("DELETE FROM samples WHERE hash = ?", (torrent_hash,))
