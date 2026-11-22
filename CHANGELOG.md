@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.40.0 (2026-11-22)
+
+### Bug Fixes
+
+- **qbittorrent**: Preserve cleanup history across outages
+  ([#354](https://github.com/worganisation/home-assistant-appdaemon/pull/354),
+  [`bbefc9a`](https://github.com/worganisation/home-assistant-appdaemon/commit/bbefc9a46eba85fd6924def2f3be1b91624e70bc))
+
+### Features
+
+- **statistics**: Manage native statistics helpers from entity labels
+  ([#352](https://github.com/worganisation/home-assistant-appdaemon/pull/352),
+  [`64d81ca`](https://github.com/worganisation/home-assistant-appdaemon/commit/64d81ca37272f3ef1f751c470d6d847613172c5b))
+
+
 ## v0.39.1 (2026-11-11)
 
 ### Bug Fixes
