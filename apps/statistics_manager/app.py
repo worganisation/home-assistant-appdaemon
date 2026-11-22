@@ -80,7 +80,7 @@ class StatisticsSensorManager(Hass):
         self.loop.call_soon_threadsafe(self.wake.set)
 
     async def run(self) -> None:
-        """Retry failed passes with bounded backoff and fresh authoritative discovery."""
+        """Retry reconciliation with bounded backoff until cancelled."""
         failures = 0
         while True:
             self.wake.clear()
@@ -116,6 +116,11 @@ class StatisticsSensorManager(Hass):
                     delay,
                     level="WARNING",
                 )
+
+            # AppDaemon can consume cancellation while publishing diagnostics.
+            if (task := asyncio.current_task()) is not None and task.cancelling():
+                return
+
             try:
                 await asyncio.wait_for(self.wake.wait(), timeout=delay)
                 await asyncio.sleep(self.debounce)
