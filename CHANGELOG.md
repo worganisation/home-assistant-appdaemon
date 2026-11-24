@@ -2,6 +2,47 @@
 
 <!-- version list -->
 
+## v0.41.0 (2026-11-24)
+
+### Build System
+
+- **deps**: Bump requests
+  ([#363](https://github.com/worganisation/home-assistant-appdaemon/pull/363),
+  [`b3c31b5`](https://github.com/worganisation/home-assistant-appdaemon/commit/b3c31b506790864b58b3067cb6337d8d4193fe1c))
+
+### Chores
+
+- Sync GCF 0.11.1 workflows
+  ([#353](https://github.com/worganisation/home-assistant-appdaemon/pull/353),
+  [`e3d53f3`](https://github.com/worganisation/home-assistant-appdaemon/commit/e3d53f3ed282248d1a703a1df4f16a738705014c))
+
+- **deps**: Update astral-sh/setup-uv action to v10.4.0
+  ([#357](https://github.com/worganisation/home-assistant-appdaemon/pull/357),
+  [`5355f74`](https://github.com/worganisation/home-assistant-appdaemon/commit/5355f743ce68fdcdfae71561a2d628c6d8163dd3))
+
+- **deps**: Update dependency aiohttp to v3.14.4 [security]
+  ([#359](https://github.com/worganisation/home-assistant-appdaemon/pull/359),
+  [`6e80cd0`](https://github.com/worganisation/home-assistant-appdaemon/commit/6e80cd0d1fb17396be0840b7f69843c95187d1b3))
+
+- **deps**: Update dependency appdaemon to v4.5.16
+  ([#351](https://github.com/worganisation/home-assistant-appdaemon/pull/351),
+  [`11d1604`](https://github.com/worganisation/home-assistant-appdaemon/commit/11d160473ceeebb823935d695148b146d995fc8f))
+
+- **deps**: Update dependency python-socketio to v5.16.2 [security]
+  ([#360](https://github.com/worganisation/home-assistant-appdaemon/pull/360),
+  [`e66b80b`](https://github.com/worganisation/home-assistant-appdaemon/commit/e66b80b2860683a9a33c784b32d5fcdc5bc0065f))
+
+- **deps**: Update dependency requests to v2.33.0 [security]
+  ([#361](https://github.com/worganisation/home-assistant-appdaemon/pull/361),
+  [`5ff588f`](https://github.com/worganisation/home-assistant-appdaemon/commit/5ff588f7e4f07d76405cdbac50f417533100c795))
+
+### Features
+
+- **qbittorrent**: Include share ratio in deletion notifications
+  ([#358](https://github.com/worganisation/home-assistant-appdaemon/pull/358),
+  [`1b2b405`](https://github.com/worganisation/home-assistant-appdaemon/commit/1b2b405a84656819124ec1c632845f7105ea899f))
+
+
 ## v0.40.2 (2026-11-22)
 
 ### Bug Fixes
