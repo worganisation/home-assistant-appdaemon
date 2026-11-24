@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from os import environ
 from re import fullmatch
-from typing import TYPE_CHECKING, Any, ClassVar
+from typing import TYPE_CHECKING, ClassVar
 
 from appdaemon.plugins.hass.hassapi import Hass
 from git import GitCommandError, Repo
+from git.exc import BadName
 
 if TYPE_CHECKING:
     from appdaemon.entity import Entity
@@ -24,11 +25,20 @@ class Updater(Hass):
 
     _current_branch: Entity
     _current_ref: Entity
+    _last_runtime: tuple[str, int, int, tuple[str, ...]] | None = None
+    _observed_sha: str
+    _initialized_apps: set[str]
 
     def initialize(self) -> None:
         """Initialize the app."""
         self._current_branch = self.get_entity("var.current_appdaemon_branch")
         self._current_ref = self.get_entity("var.current_appdaemon_ref")
+
+        self._observed_sha = self.REPO.head.commit.hexsha
+        self._initialized_apps = set()
+        self.listen_event(
+            self.record_initialization, "app_initialized", namespace="admin",
+        )
 
         self.listen_state(
             self.get_latest_release,
@@ -37,8 +47,12 @@ class Updater(Hass):
 
         self.run_every(self.update_variables, "immediate", 2 * 60)
 
-    def update_variables(self, _: dict[str, Any] | None = None) -> None:
-        """Update the variables with the current AppDaemon ref and branch."""
+    def update_variables(self, _: dict[str, object] | None = None) -> None:
+        """Refresh Git entities and publish changes in observed release runtime counts.
+
+        Args:
+            _: Scheduler callback metadata.
+        """
         try:
             current_branch = self.REPO.active_branch.name
         except TypeError:
@@ -52,11 +66,75 @@ class Updater(Hass):
         self.current_branch = current_branch
         self.current_ref = current_ref
 
+        if (
+            current_branch == "HEAD"
+            and fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+", current_ref)
+            and not self.REPO.is_dirty()
+        ):
+            self.report_runtime(current_ref)
+        else:
+            self._last_runtime = None
+
         self.log(
             "Current AppDaemon ref: %s | Current AppDaemon branch: %s",
             current_ref,
             current_branch,
         )
+
+    def record_initialization(
+        self,
+        event_type: str,
+        data: dict[str, object],
+        **kwargs: object,
+    ) -> None:
+        """Record AppDaemon's successful app initialization events at this checkout.
+
+        Args:
+            event_type: AppDaemon event name.
+            data: Event payload containing the initialized app name.
+            **kwargs: AppDaemon callback metadata.
+        """
+        del event_type, kwargs
+        app = data.get("app")
+        if isinstance(app, str) and self.REPO.head.commit.hexsha == self._observed_sha:
+            self._initialized_apps.add(app)
+
+    def report_runtime(self, tag: str) -> None:
+        """Report the active and inactive app counts sampled at a release checkout.
+
+        Args:
+            tag: Exact release tag at the detached HEAD.
+        """
+        active = str(self.get_state("sensor.active_apps", namespace="admin"))
+        inactive = str(self.get_state("sensor.inactive_apps", namespace="admin"))
+        if not active.isdecimal() or not inactive.isdecimal():
+            return
+
+        sha = self.REPO.head.commit.hexsha
+        if self._observed_sha != sha:
+            self._observed_sha = sha
+            self._initialized_apps.clear()
+
+        sample = (sha, int(active), int(inactive), tuple(sorted(self._initialized_apps)))
+        if sample == self._last_runtime:
+            return
+
+        response: object = self.call_service(
+            "rest_command/report_release_checkout",
+            return_response=True,
+            appdaemon=True,
+            tag=tag,
+            sha=sample[0],
+            status="app_runtime",
+            active=sample[1],
+            inactive=sample[2],
+            initialized=list(sample[3]),
+        )
+        match response:
+            case {"result": {"response": {"status": 204}}}:
+                self._last_runtime = sample
+            case _:
+                self.error("GitHub did not acknowledge the runtime report for %s", tag)
 
     def get_latest_release(
         self,
@@ -77,7 +155,8 @@ class Updater(Hass):
 
         Raises:
             GitCommandError: Fetch, stash or checkout failed.
-            ValueError: The requested tag could not be resolved.
+            BadName: The requested tag does not exist.
+            ValueError: The Git reference could not be resolved.
         """
         del entity, attribute, kwargs
 
@@ -100,7 +179,7 @@ class Updater(Hass):
             )
             self.REPO.git.checkout("--detach", target.hexsha)
             observed = self.REPO.head.commit.hexsha
-        except (GitCommandError, ValueError):
+        except (BadName, GitCommandError, ValueError):
             self.call_service(
                 "rest_command/report_release_checkout",
                 appdaemon=True,
