@@ -611,7 +611,10 @@ class QbittorrentStorageCleanup(Hass):
 
         self._notify(
             title="Torrent deleted",
-            message=f"Deleted {candidate.name} and its {candidate.size_formatted} of content.",
+            message=(
+                f"Deleted {candidate.name} and its {candidate.size_formatted} of data, "
+                f"at a ratio of {candidate.ratio:.2f}."
+            ),
             icon="mdi:delete-check",
             persistent=False,
             sticky=False,
