@@ -37,7 +37,9 @@ class Updater(Hass):
         self._observed_sha = self.REPO.head.commit.hexsha
         self._initialized_apps = set()
         self.listen_event(
-            self.record_initialization, "app_initialized", namespace="admin",
+            self.record_initialization,
+            "app_initialized",
+            namespace="admin",
         )
 
         self.listen_state(
