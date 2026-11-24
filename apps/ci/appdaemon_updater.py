@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from os import environ
+from re import fullmatch
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from appdaemon.plugins.hass.hassapi import Hass
@@ -61,46 +62,61 @@ class Updater(Hass):
         self,
         entity: str,
         attribute: str,
-        old: Any,
-        new: Any,
-        **kwargs: Any,
+        old: object,
+        new: object,
+        **kwargs: object,
     ) -> None:
-        """Get the latest AppDaemon release from GitHub."""
+        """Check out the requested release and report the observed commit.
+
+        Args:
+            entity: Home Assistant helper that changed.
+            attribute: Attribute that triggered the callback.
+            old: Previous helper value.
+            new: Requested release tag.
+            **kwargs: AppDaemon callback metadata.
+
+        Raises:
+            GitCommandError: Fetch, stash or checkout failed.
+            ValueError: The requested tag could not be resolved.
+        """
         del entity, attribute, kwargs
 
-        if old in {new, "unavailable"} or not old:
-            self.log("Skipping update to %s", new)
+        if (
+            not old
+            or old in ("unavailable", new)
+            or not isinstance(new, str)
+            or not fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+", new)
+        ):
             return
 
-        self.log("Updating to %s", new)
+        try:
+            self.REPO.git.fetch("--all", "--tags", "--prune")
+            target = self.REPO.commit(f"refs/tags/{new}")
+            self.REPO.git.stash(
+                "push",
+                "--include-untracked",
+                "-m",
+                f"Before release {new}",
+            )
+            self.REPO.git.checkout("--detach", target.hexsha)
+            observed = self.REPO.head.commit.hexsha
+        except (GitCommandError, ValueError):
+            self.call_service(
+                "rest_command/report_release_checkout",
+                appdaemon=True,
+                tag=new,
+                status="failed",
+            )
+            raise
 
-        self.REPO.git.fetch("--all", "--tags", "--prune")
-
-        for tag in self.REPO.tags:
-            if tag.name == new:
-                self.log(f"Updating to {new}")
-
-                self.REPO.git.add(A=True)
-
-                self.REPO.git.stash(
-                    "save",
-                    stash_msg
-                    := f"Stashing changes before updating to {new} | {self.datetime()!s}",
-                )
-
-                self.log("Stashed changes: %s", stash_msg)
-
-                try:
-                    self.REPO.git.checkout(new)
-                    self.log("Checked out %s", new)
-                except GitCommandError as exc:
-                    self.error(f"Error checking out {new}: {exc!s}")
-                    raise
-
-                self.update_variables()
-                break
-        else:
-            self.error(f"Unable to find tag {new!r}")
+        self.call_service(
+            "rest_command/report_release_checkout",
+            appdaemon=True,
+            tag=new,
+            status="checked_out",
+            sha=observed,
+        )
+        self.update_variables()
 
     @property
     def current_ref(self) -> str:
