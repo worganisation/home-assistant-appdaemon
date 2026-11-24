@@ -2,6 +2,39 @@
 
 <!-- version list -->
 
+## v0.40.2 (2026-11-22)
+
+### Bug Fixes
+
+- **statistics**: Finish shutdown when AppDaemon consumes cancellation
+  ([#356](https://github.com/worganisation/home-assistant-appdaemon/pull/356),
+  [`5490f48`](https://github.com/worganisation/home-assistant-appdaemon/commit/5490f480bae23404120794083e8b111ca6025b65))
+
+
+## v0.40.1 (2026-11-22)
+
+### Bug Fixes
+
+- **qbittorrent**: Track upload-history changes for app reload
+  ([#355](https://github.com/worganisation/home-assistant-appdaemon/pull/355),
+  [`f4997aa`](https://github.com/worganisation/home-assistant-appdaemon/commit/f4997aa8c046909a1ba06bdbd5b39ec2fd39e472))
+
+
+## v0.40.0 (2026-11-22)
+
+### Bug Fixes
+
+- **qbittorrent**: Preserve cleanup history across outages
+  ([#354](https://github.com/worganisation/home-assistant-appdaemon/pull/354),
+  [`bbefc9a`](https://github.com/worganisation/home-assistant-appdaemon/commit/bbefc9a46eba85fd6924def2f3be1b91624e70bc))
+
+### Features
+
+- **statistics**: Manage native statistics helpers from entity labels
+  ([#352](https://github.com/worganisation/home-assistant-appdaemon/pull/352),
+  [`64d81ca`](https://github.com/worganisation/home-assistant-appdaemon/commit/64d81ca37272f3ef1f751c470d6d847613172c5b))
+
+
 ## v0.39.1 (2026-11-11)
 
 ### Bug Fixes

@@ -1,5 +1,9 @@
 # Home Assistant: AppDaemon
 
+## Native Statistics helpers
+
+The [Statistics sensor manager](apps/statistics_manager/README.md) creates and maintains native Home Assistant Statistics helpers from directly assigned entity labels.
+
 ## Codex Usage
 
 The [Codex usage monitor](tools/codex_usage/README.md) tracks multiple ChatGPT accounts through the Codex app-server and publishes MQTT sensors for quota windows, resets, credits and token activity. Use `just codex-login <profile>` locally to enroll an account through Home Assistant's existing SSH connection.
@@ -13,9 +17,9 @@ account sensors, conservative download budget and individual torrent diagnostics
 
 `apps/qbittorrent/storage_cleanup.py` watches the qBittorrent scratch-storage sensor and removes the least productive eligible seeder when usage meets `input_number.qbittorrent_storage_cleanup_threshold`. The YAML `threshold` is the fallback when the helper is unavailable. Threshold and mode changes take effect without reloading AppDaemon.
 
-Upload counters are sampled every five minutes and persisted in `/data/qbittorrent/activity.sqlite3`. The retention score is the higher of upload per byte stored over the last 24 hours and the daily average over the last seven days. Partial windows use the actual continuous observation duration. Lower scores are deleted first; ties favour the longest time since meaningful upload, then the largest torrent. Lifetime ratio does not affect ranking.
+Upload counters are sampled every five minutes and persisted in `/data/qbittorrent/activity.sqlite3`. The retention score is the higher of upload per byte stored over the last 24 hours and the daily average over the last seven days. Partial windows use the time since the first observation. Lower scores are deleted first; ties favour the longest time since meaningful upload, then the largest torrent. Lifetime ratio does not affect ranking.
 
-Torrents require 24 hours since completion and 24 hours of continuous observations. A counter reset, changed completion time, invalid counter, or observation gap exceeding 15 minutes starts a fresh observation period. History survives AppDaemon reloads, retains eight days of samples for window-boundary interpolation, and removes torrents absent from a successful full-client snapshot. Uploads spanning sample boundaries are apportioned linearly.
+Torrents require 24 hours since completion and 24 hours since the first valid observation. A counter reset, changed completion time, invalid counter, or backwards clock starts a fresh observation period. History survives AppDaemon reloads and sampling outages, retains eight days of samples, and removes torrents absent from a successful full-client snapshot. Window boundaries are interpolated across gaps of up to 15 minutes. For longer gaps, any increase in the cumulative counter is attributed to the first sample after the gap.
 
 Currently uploading torrents are protected. Upload activity of at least 1 MiB within a rolling hour starts a two-hour grace period; subsequent positive upload samples extend it while the rolling-hour total meets that threshold. Shelfarr torrents and any torrent with a MyAnonamouse tracker are excluded from deletion. These protections apply to both automatic and notification-confirmed cleanup.
 
