@@ -1,5 +1,18 @@
 ---
 
+# Native Statistics helpers
+
+statistics_sensor_manager:
+  module: statistics_manager.app
+  class: StatisticsSensorManager
+  label: trend72Hours
+  policy_id: change72h
+  hours: 72
+  precision: 2
+  reconcile_interval: 3600
+  debounce: 2
+  storage_path: /data/statistics_manager/ownership.json
+
 # AppDaemon Updater
 
 appdaemon_updater:
@@ -52,7 +65,7 @@ codex_usage_monitor:
 # qBittorrent Storage Cleanup
 
 qbittorrent_storage_cleanup:
-  module: storage_cleanup
+  module: qbittorrent.storage_cleanup
   class: QbittorrentStorageCleanup
   storage_entity: sensor.storage_cc_scratch_qbt_disk_used_percentage
   threshold_entity: input_number.qbittorrent_storage_cleanup_threshold

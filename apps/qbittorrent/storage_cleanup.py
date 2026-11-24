@@ -10,8 +10,9 @@ from typing import TYPE_CHECKING, Any, Final
 
 from appdaemon.plugins.hass.hassapi import Hass
 from mam.model import is_mam_tracker
-from qbittorrent.activity import SAMPLE_INTERVAL, ActivityHistory
 from requests import RequestException, Response, Session
+
+from qbittorrent.activity import SAMPLE_INTERVAL, ActivityHistory
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -610,7 +611,10 @@ class QbittorrentStorageCleanup(Hass):
 
         self._notify(
             title="Torrent deleted",
-            message=f"Deleted {candidate.name} and its {candidate.size_formatted} of content.",
+            message=(
+                f"Deleted {candidate.name} ({candidate.size_formatted} "
+                f"with a ratio of {candidate.ratio:.2f})"
+            ),
             icon="mdi:delete-check",
             persistent=False,
             sticky=False,
