@@ -31,7 +31,7 @@ jobs:
     # yamllint disable-line rule:line-length
     uses: worganisation/github-config-files/.github/workflows/__semantic-release.yml@0.11.1
     with:
-      python-version: '3.13'
+      python-version: '3.15'
       force-deployment: >-
         ${{ inputs.force-deployment != 'auto' && inputs.force-deployment || '' }}
     secrets: inherit
