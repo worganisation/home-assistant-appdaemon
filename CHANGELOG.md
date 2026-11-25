@@ -2,6 +2,21 @@
 
 <!-- version list -->
 
+## v0.42.0 (2026-11-25)
+
+### Chores
+
+- **sync**: Pin github-config-files workflows to 0.12.0
+  ([#365](https://github.com/worganisation/home-assistant-appdaemon/pull/365),
+  [`a59cc09`](https://github.com/worganisation/home-assistant-appdaemon/commit/a59cc093d2bd068417f0f416580903bd74f4c826))
+
+### Features
+
+- Report release checkout results to Home Assistant
+  ([#364](https://github.com/worganisation/home-assistant-appdaemon/pull/364),
+  [`f2f0399`](https://github.com/worganisation/home-assistant-appdaemon/commit/f2f039914d457942cb453badf2f9dcaedeeb5f93))
+
+
 ## v0.41.0 (2026-11-24)
 
 ### Build System
