@@ -1,4 +1,6 @@
 const { createHash } = require('node:crypto')
+const { readFile } = require('node:fs/promises')
+const { join } = require('node:path')
 const { setTimeout: sleep } = require('node:timers/promises')
 
 /** Escape text before adding it to Slack markup. */
@@ -135,6 +137,30 @@ function stageReply(run, job, step) {
   return { key: 'run-' + run.id + '-' + digest, text, skipped: stage.conclusion === 'skipped' }
 }
 
+/**
+ * Format downstream PR links for the sync job's Slack reply.
+ * @param {string|undefined} directory Artifact download directory, when available.
+ * @returns {Promise<string>} Slack text to append to the sync reply.
+ */
+async function syncDetails(directory) {
+  if (!directory) return ''
+
+  const urls = JSON.parse(await readFile(join(directory, 'sync-prs.json'), 'utf8'))
+  if (!Array.isArray(urls)) throw new Error('Invalid repo sync PR list')
+
+  const links = []
+  for (const url of [...new Set(urls)].sort((a, b) => a.localeCompare(b))) {
+    const match = /^https:\/\/github\.com\/((?:worganisation|worgarside)\/[\w.-]+)\/pull\/(\d+)$/i.exec(url)
+    if (!match) throw new Error('Invalid repo sync PR URL')
+
+    links.push('• <' + url + '|' + match[1] + ' #' + match[2] + '>')
+  }
+
+  return links.length
+    ? '\n\n:arrows_counterclockwise: *Downstream pull requests*\n' + links.join('\n')
+    : '\n\nNo downstream pull requests were needed.'
+}
+
 /** Identify the release and material jobs from a completed workflow attempt. */
 async function workflowOutcome(github, repo, run) {
   const { data: latest } = await github.rest.actions.getWorkflowRun({ ...repo, run_id: run.id })
@@ -166,6 +192,8 @@ async function workflowOutcome(github, repo, run) {
     replies.push(stageReply(run, job))
   }
   if (!material.length) replies.push(stageReply(run, { name: run.name, conclusion: run.conclusion }))
+  // Sync Repos has one material job, so its artifact describes the first reply.
+  replies[0].text += await syncDetails(process.env.SYNC_LINKS_DIR)
   return { tag, replies }
 }
 
