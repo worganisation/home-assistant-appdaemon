@@ -52,7 +52,7 @@ Monitor status and last successful update remain diagnostic sensors. A successfu
 just codex-dashboard
 ```
 
-This command prints account sections for the existing `home-will/tooling` storage-mode view. The sections contain gauges, Mushroom detail cards and a seven-day mini-graph. Apply them through Home Assistant's dashboard API/MCP after confirming actual entity IDs; preserve the Cursor sections and use a fresh configuration hash. Dashboard exports are not authored configuration. Refresh the Codex sections when enrolling accounts or when the service changes its window layout. Historical graphs accumulate through Home Assistant Recorder; the collector does not backfill history.
+This command prints account sections for the existing `home-will/tooling` storage-mode view. The sections contain gauges, Mushroom detail cards and a seven-day mini-graph. Apply them through Home Assistant's dashboard API/MCP after confirming actual entity IDs and obtaining a fresh configuration hash. Dashboard exports are not authored configuration. Refresh the Codex sections when enrolling accounts or when the service changes its window layout. Historical graphs accumulate through Home Assistant Recorder; the collector does not backfill history.
 
 ## Operations and recovery
 
