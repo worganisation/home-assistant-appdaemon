@@ -2,6 +2,29 @@
 
 <!-- version list -->
 
+## v0.42.1 (2026-11-27)
+
+### Bug Fixes
+
+- **mam**: Dismiss resolved phone alerts quietly
+  ([#369](https://github.com/worganisation/home-assistant-appdaemon/pull/369),
+  [`d86607f`](https://github.com/worganisation/home-assistant-appdaemon/commit/d86607f0b52e76cd78571886835d58fc8a99426d))
+
+### Chores
+
+- **sync**: Pin github-config-files workflows to 0.12.2
+  ([#366](https://github.com/worganisation/home-assistant-appdaemon/pull/366),
+  [`6025676`](https://github.com/worganisation/home-assistant-appdaemon/commit/6025676b0f38b90eca8527f99f6b3246fecbb168))
+
+- **sync**: Pin github-config-files workflows to 0.13.0
+  ([#367](https://github.com/worganisation/home-assistant-appdaemon/pull/367),
+  [`fa3f114`](https://github.com/worganisation/home-assistant-appdaemon/commit/fa3f1143eaf3f44fd377b55e8c5ab8c96740627d))
+
+- **sync**: Pin github-config-files workflows to 0.13.2
+  ([#368](https://github.com/worganisation/home-assistant-appdaemon/pull/368),
+  [`2bab8c9`](https://github.com/worganisation/home-assistant-appdaemon/commit/2bab8c9d4647de2b8de6945ee08df5a52fe3418d))
+
+
 ## v0.42.0 (2026-11-25)
 
 ### Chores
