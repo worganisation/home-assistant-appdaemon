@@ -345,10 +345,15 @@ class MamMonitor(hass.Hass):
         mam_fresh: bool,
         qbt_fresh: bool,
     ) -> None:
-        """Debounce transient issues and persist deduplication across restarts."""
+        """Update or dismiss the shared phone notification as issues change.
+
+        Args:
+            issues: Current issue keys mapped to severity and message.
+            now: Current Unix timestamp.
+            mam_fresh: Whether the account snapshot is fresh.
+            qbt_fresh: Whether the torrent snapshot is fresh.
+        """
         alerts = self.state["alerts"]
-        messages = []
-        critical = False
         sent_updates: dict[str, tuple[str, str]] = {}
         cleared_alerts: list[str] = []
         for key, (severity, message) in issues.items():
@@ -371,10 +376,9 @@ class MamMonitor(hass.Hass):
                 or (severity == "critical" and now - alert["last_sent"] >= DAY_SECONDS)
             )
             if eligible and due:
-                messages.append(message)
-                critical |= severity == "critical"
                 sent_updates[key] = severity, message
-        for key in list(alerts):
+
+        for key in alerts:
             if key in issues:
                 continue
             dependencies_fresh = (
@@ -388,47 +392,59 @@ class MamMonitor(hass.Hass):
                 dependencies_fresh = mam_fresh and not self.state["mam"]["error"]
             if not dependencies_fresh:
                 continue
-            if alerts[key]["last_sent"]:
-                # Keep session recovery visible even when other updates fill the batch.
-                messages.insert(
-                    0 if key == "mam_session" else len(messages),
-                    "MAM account authentication recovered; account data is available again."
-                    if key == "mam_session"
-                    else "MAM notification counters are now clear."
-                    if key == "site_notice"
-                    else "Cleared alert: "
-                    + alerts[key].get(
-                        "last_message",
-                        key.split(":")[-1].replace("_", " "),
-                    ),
-                )
             cleared_alerts.append(key)
-        if not messages:
+
+        if not sent_updates and not any(
+            alerts[key]["last_sent"] for key in cleared_alerts
+        ):
             for key in cleared_alerts:
                 del alerts[key]
             return
+
+        active = sent_updates.copy()
+        for key, alert in alerts.items():
+            if key not in active and key not in cleared_alerts and alert["last_sent"]:
+                active[key] = issues.get(
+                    key,
+                    (
+                        alert["severity"],
+                        alert.get("last_message", key.split(":")[-1].replace("_", " ")),
+                    ),
+                )
+
+        notify_service = str(
+            self.args.get("notify_script", "script.notify_will"),
+        ).replace(".", "/", 1)
         self.persist()
         try:
-            self.call_service(
-                str(self.args.get("notify_script", "script.notify_will")).replace(
-                    ".",
-                    "/",
-                    1,
-                ),
-                title="MAM monitoring",
-                message="\n".join(messages[:MESSAGE_LIMIT])
-                + (
-                    f"\nPlus {len(messages) - MESSAGE_LIMIT} updates; see dashboard."
-                    if len(messages) > MESSAGE_LIMIT
-                    else ""
-                ),
-                notification_id="mam_monitor",
-                mobile_notification_icon="mdi:book-alert",
-                phone_only=True,
-                sticky=True,
-                persistent=critical,
-                url="/mam-monitor/overview",
-            )
+            if active:
+                messages = [message for _, message in active.values()]
+                self.call_service(
+                    notify_service,
+                    title="MAM monitoring",
+                    message="\n".join(messages[:MESSAGE_LIMIT])
+                    + (
+                        f"\nPlus {len(messages) - MESSAGE_LIMIT} updates; see dashboard."
+                        if len(messages) > MESSAGE_LIMIT
+                        else ""
+                    ),
+                    notification_id="mam_monitor",
+                    mobile_notification_icon="mdi:book-alert",
+                    phone_only=True,
+                    sticky=True,
+                    persistent=any(
+                        severity == "critical" for severity, _ in active.values()
+                    ),
+                    alert_once=not sent_updates,
+                    url="/mam-monitor/overview",
+                )
+            else:
+                self.call_service(
+                    notify_service,
+                    message="clear_notification",
+                    notification_id="mam_monitor",
+                    phone_only=True,
+                )
         except Exception:
             self.log("MAM monitor notification delivery failed", level="WARNING")
             return

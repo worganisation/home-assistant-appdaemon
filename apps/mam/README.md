@@ -73,14 +73,13 @@ restarts. Missing, invalid, or rejected MAM sessions notify immediately on detec
 without waiting for the 90-minute stale-data threshold. The alert explains session
 replacement, the `mam_monitor_mam_id` secret, and the AppDaemon reload requirement;
 it repeats neither the credential nor raw API responses. Unchanged session failures
-stay quiet, and a successful fresh account poll sends an explicit recovery notification.
+stay quiet. A successful fresh account poll resolves the session alert.
 Transport and other source failures retain the stale-data alert and polling backoff.
 Site-notice alerts name each notification type, count and where to
 review it on MAM; they update when that summary changes and stay quiet while
-unchanged. Cleared notices are reported explicitly. No private-message or ticket
+unchanged. No private-message or ticket
 contents are fetched. Critical unresolved issues repeat at most daily; fresh source data is
-required before resolving its alerts. A consolidated notification carries at most
-eight updates and links to remaining dashboard detail.
+required before resolving its alerts. The phone notification lists up to eight active alerts and links to the dashboard for the rest. When alerts resolve, their entries are removed quietly. Resolving the last alert dismisses the notification.
 
 ## Home Assistant configuration
 
